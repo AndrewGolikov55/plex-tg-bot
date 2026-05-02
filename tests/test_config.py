@@ -1,4 +1,5 @@
 import pytest
+from pydantic import ValidationError
 
 from plex_tg_bot.config import Settings
 
@@ -29,7 +30,7 @@ def test_required_only(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_missing_required_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     for k in ("TELEGRAM_BOT_TOKEN", "ADMIN_CHAT_ID", "PLEX_TOKEN"):
         monkeypatch.delenv(k, raising=False)
-    with pytest.raises(Exception):  # noqa: B017
+    with pytest.raises(ValidationError):
         Settings()
 
 
@@ -55,3 +56,22 @@ def test_proxy_url_propagates(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PROXY_URL", "socks5://1.2.3.4:1080")
     s = Settings()
     assert s.proxy_url == "socks5://1.2.3.4:1080"
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ("1,2,3", [1, 2, 3]),
+        ("[1,2,3]", [1, 2, 3]),
+        ("", []),
+        ("[]", []),
+        (" 7 ", [7]),
+    ],
+)
+def test_shared_library_ids_parsing(
+    monkeypatch: pytest.MonkeyPatch, raw: str, expected: list[int]
+) -> None:
+    for k, v in _base_env().items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("SHARED_LIBRARY_IDS", raw)
+    assert Settings().shared_library_ids == expected

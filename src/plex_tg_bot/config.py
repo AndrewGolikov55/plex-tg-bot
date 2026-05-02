@@ -1,13 +1,44 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings.sources import EnvSettingsSource, PydanticBaseSettingsSource
+
+
+class EnvSettingsSourceNoJsonList(EnvSettingsSource):
+    """Custom env settings source that doesn't try to JSON decode list fields."""
+
+    def decode_complex_value(
+        self, field_name: str, field_info: Any, value: str
+    ) -> Any:
+        if field_name == "shared_library_ids":
+            # Don't try JSON decoding, let the validator handle it
+            return value
+        return super().decode_complex_value(field_name, field_info, value)
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=None, case_sensitive=False, extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=None, case_sensitive=False, extra="ignore"
+    )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        return (
+            init_settings,
+            EnvSettingsSourceNoJsonList(settings_cls),
+            dotenv_settings,
+            file_secret_settings,
+        )
 
     # Required
     telegram_bot_token: str
@@ -58,7 +89,12 @@ class Settings(BaseSettings):
             v = v.strip()
             if not v or v == "[]":
                 return []
-            return [int(x) for x in v.strip("[]").split(",") if x.strip()]
+            # Handle comma-separated and JSON-like formats
+            if v.startswith("[") and v.endswith("]"):
+                v = v[1:-1]  # Strip brackets
+            return [int(x.strip()) for x in v.split(",") if x.strip()]
+        if isinstance(v, int):
+            return [v]
         return v
 
     @model_validator(mode="after")
