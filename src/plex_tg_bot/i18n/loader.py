@@ -37,5 +37,8 @@ def set_lang(lang: str) -> None:
 def t(key: str, **kwargs: Any) -> str:
     if _LANG not in _LOCALES:
         _LOCALES[_LANG] = _load(_LANG)
-    template = _LOCALES[_LANG][key]
+    try:
+        template = _LOCALES[_LANG][key]
+    except KeyError:
+        raise KeyError(f"{key!r} not found in locale '{_LANG}'") from None
     return template.format(**kwargs) if kwargs else template

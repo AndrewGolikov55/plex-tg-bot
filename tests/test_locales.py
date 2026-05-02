@@ -39,3 +39,11 @@ def test_t_unknown_key_raises() -> None:
     import pytest
     with pytest.raises(KeyError):
         t("nonexistent.key")
+
+
+def test_set_lang_switches_locale() -> None:
+    set_lang("ru")
+    try:
+        assert t("admin.not_authorized") == "Нет доступа."
+    finally:
+        set_lang("en")
