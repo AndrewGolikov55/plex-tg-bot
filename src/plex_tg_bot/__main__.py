@@ -3,7 +3,11 @@ from __future__ import annotations
 import asyncio
 import logging
 
+from apscheduler.schedulers.asyncio import AsyncIOScheduler  # type: ignore[import-untyped]
+from apscheduler.triggers.cron import CronTrigger  # type: ignore[import-untyped]
+
 from plex_tg_bot import __version__
+from plex_tg_bot.bot.admin import make_admin_router
 from plex_tg_bot.bot.approve import make_approve_router
 from plex_tg_bot.bot.apps import make_apps_router
 from plex_tg_bot.bot.factory import make_bot_and_dispatcher
@@ -15,6 +19,7 @@ from plex_tg_bot.bot.watch import make_watch_router
 from plex_tg_bot.config import Settings
 from plex_tg_bot.db import Repo
 from plex_tg_bot.i18n import set_lang
+from plex_tg_bot.jobs.daily_sync import run_daily_sync
 from plex_tg_bot.services.http import make_async_client
 from plex_tg_bot.services.overseerr import OverseerrClient
 from plex_tg_bot.services.plex import PlexClient
@@ -56,6 +61,18 @@ async def _run() -> None:
         except Exception:
             log.warning("could not discover Plex server at startup")
 
+    async def _sync_now() -> tuple[int, int]:
+        return await run_daily_sync(repo, plex)
+
+    scheduler = AsyncIOScheduler()
+    scheduler.add_job(
+        _sync_now,
+        CronTrigger.from_crontab(settings.daily_sync_cron),
+        id="daily_sync",
+    )
+    scheduler.start()
+
+    dp.include_router(make_admin_router(repo, settings, _sync_now))
     dp.include_router(make_start_router(repo, settings))
     dp.include_router(make_request_router(repo, bot, settings))
     dp.include_router(make_approve_router(repo, bot, settings, plex, overseerr))
@@ -66,6 +83,7 @@ async def _run() -> None:
     try:
         await dp.start_polling(bot)
     finally:
+        scheduler.shutdown(wait=False)
         await http.aclose()
         await repo.close()
         await bot.session.close()
