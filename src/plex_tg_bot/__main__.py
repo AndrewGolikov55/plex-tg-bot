@@ -4,6 +4,7 @@ import asyncio
 import logging
 
 from plex_tg_bot.bot.factory import make_bot_and_dispatcher
+from plex_tg_bot.bot.start import make_start_router
 from plex_tg_bot.config import Settings
 from plex_tg_bot.db import Repo
 from plex_tg_bot.i18n import set_lang
@@ -21,7 +22,7 @@ async def _run() -> None:
     http = make_async_client(settings.proxy_url, settings.no_proxy)
 
     bot, dp = make_bot_and_dispatcher(settings)
-    # routers attached in later phases
+    dp.include_router(make_start_router(repo, settings))
     try:
         await dp.start_polling(bot)
     finally:
