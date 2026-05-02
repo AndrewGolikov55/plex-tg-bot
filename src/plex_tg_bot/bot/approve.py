@@ -1,0 +1,141 @@
+"""Approve callback handler with transactional rollback on Plex failure."""
+from __future__ import annotations
+
+import logging
+import time
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
+
+from aiogram import Bot, F, Router, types
+
+from plex_tg_bot.config import Settings
+from plex_tg_bot.db import Repo
+from plex_tg_bot.i18n import t
+from plex_tg_bot.services.overseerr import OverseerrClient, OverseerrError
+from plex_tg_bot.services.plex import PlexAlreadyShared, PlexAuthError, PlexClient, PlexUnreachable
+
+if TYPE_CHECKING:
+    pass
+
+log = logging.getLogger(__name__)
+
+
+async def handle_approve(
+    cq: types.CallbackQuery,
+    repo: Repo,
+    bot: Bot,
+    settings: Settings,
+    plex: PlexClient,
+    overseerr: OverseerrClient | None,
+) -> None:
+    """Core approve logic — separated from the router for testability."""
+    admin = cq.from_user
+    rid = int((cq.data or "").split(":")[1])
+    now = int(time.time())
+
+    admin_label = f"@{admin.username}" if admin.username else admin.first_name or str(admin.id)
+
+    # ── Step 1: Atomic claim ────────────────────────────────────────────────
+    claimed = await repo.claim_request(rid, admin.id, now)
+    if not claimed:
+        # Already handled — find out who handled it (best-effort)
+        req = await repo.get_request(rid)
+        await cq.answer(t("admin.already_handled", admin=admin_label), show_alert=True)
+        return
+
+    # ── Step 2: Fetch request and server cache ──────────────────────────────
+    req = await repo.get_request(rid)
+    if req is None:
+        await repo.rollback_claim(rid)
+        log.error("approve: request %d disappeared after claim", rid)
+        await cq.answer(t("errors.plex_temporary"), show_alert=True)
+        return
+
+    cache = await repo.get_plex_server_cache()
+    if cache is None:
+        await repo.rollback_claim(rid)
+        log.error("approve: plex_server_cache is empty, cannot share")
+        await cq.answer(t("errors.plex_temporary"), show_alert=True)
+        return
+
+    email: str = req["email"]
+    telegram_id: int = req["telegram_id"]
+    machine_identifier: str = cache["machine_identifier"]
+
+    # ── Step 3: Plex share ──────────────────────────────────────────────────
+    plex_user_id: int
+    try:
+        plex_user_id = await plex.share_server(
+            machine_identifier=machine_identifier,
+            email=email,
+            library_section_ids=settings.shared_library_ids,
+            allow_sync=settings.allow_sync,
+            allow_camera_upload=settings.allow_camera_upload,
+            allow_channels=settings.allow_channels,
+        )
+    except PlexAlreadyShared as e:
+        plex_user_id = int(e.args[0]) if e.args else 0
+        log.info("approve: %s already shared (plex_user_id=%d)", email, plex_user_id)
+    except (PlexAuthError, PlexUnreachable) as e:
+        log.warning("approve: Plex error for request %d: %s", rid, e)
+        await repo.rollback_claim(rid)
+        await cq.answer(t("errors.plex_temporary"), show_alert=True)
+        return
+
+    # ── Step 4: Upsert shared user ──────────────────────────────────────────
+    await repo.upsert_shared_user(
+        email=email,
+        telegram_id=telegram_id,
+        plex_user_id=plex_user_id,
+        shared_at=now,
+        last_seen_in_plex=now,
+    )
+
+    # ── Step 5: Finalize approval ───────────────────────────────────────────
+    await repo.finalize_approve(rid)
+
+    # ── Step 6: Best-effort Overseerr ───────────────────────────────────────
+    if overseerr is not None and plex_user_id:
+        try:
+            await overseerr.import_from_plex([plex_user_id])
+        except OverseerrError as e:
+            log.warning("approve: Overseerr import failed (non-fatal): %s", e)
+
+    # ── Step 7: Edit admin card ─────────────────────────────────────────────
+    time_str = datetime.fromtimestamp(now, tz=UTC).strftime("%Y-%m-%d %H:%M UTC")
+    try:
+        await bot.edit_message_text(
+            chat_id=req["admin_chat_id"],
+            message_id=req["admin_msg_id"],
+            text=t("admin.approved_by", admin=admin_label, time=time_str),
+        )
+    except Exception as e:
+        log.warning("approve: could not edit admin card for request %d: %s", rid, e)
+
+    # ── Step 8: DM user ─────────────────────────────────────────────────────
+    try:
+        await bot.send_message(
+            telegram_id,
+            t("notify_user.approved", email=email),
+        )
+    except Exception as e:
+        log.warning("approve: could not DM user %d: %s", telegram_id, e)
+
+    # ── Step 9: Stop spinner ────────────────────────────────────────────────
+    await cq.answer()
+
+
+def make_approve_router(
+    repo: Repo,
+    bot: Bot,
+    settings: Settings,
+    plex: PlexClient,
+    overseerr: OverseerrClient | None,
+) -> Router:
+    router = Router(name="approve")
+
+    @router.callback_query(F.data.startswith("approve:"))
+    async def _on_approve(cq: types.CallbackQuery) -> None:
+        await handle_approve(cq, repo, bot, settings, plex, overseerr)
+
+    return router
