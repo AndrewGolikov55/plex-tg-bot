@@ -1,0 +1,44 @@
+welcome:
+  no_access: "Hi! I'm the access bot for Plex server «{server_name}». Press the button below to request access."
+  has_access: "Hi! You already have access to «{server_name}». What would you like to do?"
+  pending: "⏳ Your request is awaiting admin approval."
+request:
+  ask_email: "Send your email — Plex will deliver the invite there."
+  invalid_email: "That doesn't look like a valid email. Please try again."
+  ask_referrer: "Where did you hear about the bot / who sent you? Free text."
+  submitted: "⏳ Request submitted. I'll message you once an admin decides."
+  already_have_access: "You already have access."
+  already_pending: "Your previous request is still pending."
+admin:
+  request_card: |-
+    📥 Access request
+    From: {user} (TG: {tg_id})
+    Email: {email}
+    Referrer: {referrer}
+  approved_by: "✅ Approved by {admin} at {time}"
+  rejected_by: "❌ Rejected by {admin} at {time}"
+  ask_reject_reason: "@{admin}, please reply to this message with the rejection reason, or send /skip."
+  already_handled: "Already handled by @{admin}"
+  not_authorized: "Not authorized."
+  list_header: "Users:"
+  pending_header: "Pending requests:"
+  sync_done: "Daily sync finished. Active: {active}, revoked: {revoked}."
+notify_user:
+  approved: "✅ Done! An invite was sent to {email}. Accept it from your inbox, then /start will show the new menu."
+  rejected: "❌ Your request was rejected.\nReason: {reason}"
+  rejected_no_reason: "❌ Your request was rejected."
+menu:
+  request_access: "📥 Request access to Plex"
+  apps: "📱 Get apps"
+  watch: "🌐 Watch in browser"
+  overseerr: "🎬 Request content"
+  help: "ℹ️ Help"
+help:
+  text: "Commands: /start, /request, /apps, /watch, /overseerr, /help"
+errors:
+  plex_unreachable: "Plex API is unreachable right now. Please try later."
+  plex_temporary: "Plex unreachable, try again later"
+  internal: "Internal error. Admin has been notified."
+  feature_disabled: "This feature is not configured by the admin."
+apps:
+  fallback: "Download Plex from {url}"

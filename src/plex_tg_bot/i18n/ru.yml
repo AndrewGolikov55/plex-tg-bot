@@ -1,0 +1,44 @@
+welcome:
+  no_access: "Привет! Я бот для доступа к серверу Plex «{server_name}». Нажми кнопку ниже, чтобы запросить доступ."
+  has_access: "Привет! У тебя уже есть доступ к «{server_name}». Что хочешь сделать?"
+  pending: "⏳ Твоя заявка ожидает одобрения администратора."
+request:
+  ask_email: "Пришли свой email — Plex отправит приглашение именно туда."
+  invalid_email: "Не похоже на корректный email. Попробуй ещё раз."
+  ask_referrer: "Откуда ты узнал о боте / кто прислал? Свободный текст."
+  submitted: "⏳ Заявка отправлена. Напишу, как только администратор примет решение."
+  already_have_access: "У тебя уже есть доступ."
+  already_pending: "Твоя предыдущая заявка всё ещё на рассмотрении."
+admin:
+  request_card: |-
+    📥 Заявка на доступ
+    От: {user} (TG: {tg_id})
+    Email: {email}
+    Источник: {referrer}
+  approved_by: "✅ Одобрено: {admin} в {time}"
+  rejected_by: "❌ Отклонено: {admin} в {time}"
+  ask_reject_reason: "@{admin}, ответь на это сообщение с причиной отказа или отправь /skip."
+  already_handled: "Уже обработано администратором @{admin}"
+  not_authorized: "Нет доступа."
+  list_header: "Пользователи:"
+  pending_header: "Заявки на рассмотрении:"
+  sync_done: "Ежедневная синхронизация завершена. Активных: {active}, отозвано: {revoked}."
+notify_user:
+  approved: "✅ Готово! Приглашение отправлено на {email}. Прими его из почты, после чего /start покажет новое меню."
+  rejected: "❌ Твоя заявка отклонена.\nПричина: {reason}"
+  rejected_no_reason: "❌ Твоя заявка отклонена."
+menu:
+  request_access: "📥 Запросить доступ к Plex"
+  apps: "📱 Скачать приложения"
+  watch: "🌐 Смотреть в браузере"
+  overseerr: "🎬 Запросить контент"
+  help: "ℹ️ Помощь"
+help:
+  text: "Команды: /start, /request, /apps, /watch, /overseerr, /help"
+errors:
+  plex_unreachable: "Plex API сейчас недоступен. Попробуй позже."
+  plex_temporary: "Plex недоступен, попробуй позже"
+  internal: "Внутренняя ошибка. Администратор уведомлён."
+  feature_disabled: "Эта функция не настроена администратором."
+apps:
+  fallback: "Скачай Plex по ссылке: {url}"
