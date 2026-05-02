@@ -1,13 +1,16 @@
-"""Approve callback handler with transactional rollback on Plex failure."""
+"""Approve/reject callback handlers with transactional rollback on Plex failure."""
 from __future__ import annotations
 
 import logging
 import time
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from aiogram import Bot, F, Router, types
+from aiogram.filters import StateFilter
+from aiogram.fsm.context import FSMContext
 
+from plex_tg_bot.bot.states import RejectFSM
 from plex_tg_bot.config import Settings
 from plex_tg_bot.db import Repo
 from plex_tg_bot.i18n import t
@@ -125,6 +128,118 @@ async def handle_approve(
     await cq.answer()
 
 
+async def _finalize_reject(
+    rid: int,
+    reason: str | None,
+    admin: Any,
+    repo: Repo,
+    bot: Bot,
+) -> None:
+    """Finalize a reject: update DB, edit admin card, DM the user."""
+    req = await repo.get_request(rid)
+    if req is None:
+        return
+    await repo.finalize_reject(rid, reason)
+    time_str = datetime.now(UTC).strftime("%H:%M UTC")
+    admin_label = f"@{admin.username}" if admin.username else admin.first_name or "admin"
+    try:
+        await bot.edit_message_text(
+            chat_id=req["admin_chat_id"],
+            message_id=req["admin_msg_id"],
+            text=t("admin.rejected_by", admin=admin_label, time=time_str),
+        )
+    except Exception as e:
+        log.warning("reject: edit admin card failed: %s", e)
+    key = "notify_user.rejected" if reason else "notify_user.rejected_no_reason"
+    try:
+        if reason:
+            await bot.send_message(req["telegram_id"], t(key, reason=reason))
+        else:
+            await bot.send_message(req["telegram_id"], t(key))
+    except Exception as e:
+        log.warning("reject: DM user failed: %s", e)
+
+
+async def handle_reject(
+    cq: types.CallbackQuery,
+    repo: Repo,
+    bot: Bot,
+    settings: Settings,
+    state: FSMContext,
+) -> None:
+    """Reject callback — claims request and enters FSM to collect reason."""
+    if cq.data is None or cq.from_user is None or cq.message is None:
+        return
+    rid = int(cq.data.split(":", 1)[1])
+    admin = cq.from_user
+    claimed = await repo.claim_request(rid, decided_by=admin.id, decided_at=int(time.time()))
+    if not claimed:
+        admin_label = admin.username or admin.first_name or str(admin.id)
+        await cq.answer(
+            t("admin.already_handled", admin=admin_label),
+            show_alert=True,
+        )
+        return
+    await state.set_state(RejectFSM.awaiting_reason)
+    await state.update_data(
+        request_id=rid,
+        card_msg_id=cq.message.message_id,
+        admin_chat_id=cq.message.chat.id,
+    )
+    admin_label = admin.username or admin.first_name or "admin"
+    await bot.send_message(
+        cq.message.chat.id,
+        t("admin.ask_reject_reason", admin=admin_label),
+        reply_to_message_id=cq.message.message_id,
+    )
+    await cq.answer()
+
+
+async def handle_reject_cancel(
+    message: types.Message,
+    state: FSMContext,
+    repo: Repo,
+) -> None:
+    """Admin /cancel → rollback claim and clear FSM."""
+    data = await state.get_data()
+    rid = int(data.get("request_id", 0))
+    if rid:
+        await repo.rollback_claim(rid)
+    await state.clear()
+
+
+async def handle_reject_skip(
+    message: types.Message,
+    state: FSMContext,
+    repo: Repo,
+    bot: Bot,
+) -> None:
+    """Admin /skip → finalize with reason=None."""
+    if message.from_user is None:
+        return
+    data = await state.get_data()
+    rid = int(data.get("request_id", 0))
+    await _finalize_reject(rid, None, message.from_user, repo, bot)
+    await state.clear()
+
+
+async def handle_reject_reason(
+    message: types.Message,
+    state: FSMContext,
+    repo: Repo,
+    bot: Bot,
+) -> None:
+    """Admin replies with reason text (must be reply to the card message)."""
+    if message.from_user is None or message.reply_to_message is None:
+        return
+    data = await state.get_data()
+    if message.reply_to_message.message_id != data.get("card_msg_id"):
+        return  # ignore replies to other messages
+    rid = int(data.get("request_id", 0))
+    await _finalize_reject(rid, message.text or "", message.from_user, repo, bot)
+    await state.clear()
+
+
 def make_approve_router(
     repo: Repo,
     bot: Bot,
@@ -137,5 +252,21 @@ def make_approve_router(
     @router.callback_query(F.data.startswith("approve:"))
     async def _on_approve(cq: types.CallbackQuery) -> None:
         await handle_approve(cq, repo, bot, settings, plex, overseerr)
+
+    @router.callback_query(F.data.startswith("reject:"))
+    async def _on_reject(cq: types.CallbackQuery, state: FSMContext) -> None:
+        await handle_reject(cq, repo, bot, settings, state)
+
+    @router.message(StateFilter(RejectFSM.awaiting_reason), F.text == "/cancel")
+    async def _on_reject_cancel(message: types.Message, state: FSMContext) -> None:
+        await handle_reject_cancel(message, state, repo)
+
+    @router.message(StateFilter(RejectFSM.awaiting_reason), F.text == "/skip")
+    async def _on_reject_skip(message: types.Message, state: FSMContext) -> None:
+        await handle_reject_skip(message, state, repo, bot)
+
+    @router.message(StateFilter(RejectFSM.awaiting_reason), F.text)
+    async def _on_reject_reason(message: types.Message, state: FSMContext) -> None:
+        await handle_reject_reason(message, state, repo, bot)
 
     return router
