@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
+from collections.abc import Awaitable, Callable
+from typing import Any
 
+from aiogram import BaseMiddleware
+from aiogram.types import TelegramObject
 from apscheduler.schedulers.asyncio import AsyncIOScheduler  # type: ignore[import-untyped]
 from apscheduler.triggers.cron import CronTrigger  # type: ignore[import-untyped]
 
@@ -18,6 +23,7 @@ from plex_tg_bot.bot.start import make_start_router
 from plex_tg_bot.bot.watch import make_watch_router
 from plex_tg_bot.config import Settings
 from plex_tg_bot.db import Repo
+from plex_tg_bot.http_server import Observability, make_http_app, start_http_server
 from plex_tg_bot.i18n import set_lang
 from plex_tg_bot.jobs.daily_sync import run_daily_sync
 from plex_tg_bot.services.http import make_async_client
@@ -25,6 +31,20 @@ from plex_tg_bot.services.overseerr import OverseerrClient
 from plex_tg_bot.services.plex import PlexClient
 
 log = logging.getLogger(__name__)
+
+
+class _TelegramTickMiddleware(BaseMiddleware):
+    def __init__(self, obs: Observability) -> None:
+        self._obs = obs
+
+    async def __call__(
+        self,
+        handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]],
+        event: TelegramObject,
+        data: dict[str, Any],
+    ) -> Any:
+        self._obs.last_tg_update.set(time.time())
+        return await handler(event, data)
 
 
 async def _run() -> None:
@@ -72,6 +92,23 @@ async def _run() -> None:
     )
     scheduler.start()
 
+    obs = Observability()
+    http_app = make_http_app(obs)
+    http_runner = await start_http_server(http_app, settings.health_port)
+
+    async def _refresh_gauges() -> None:
+        while True:
+            try:
+                obs.pending.set(await repo.count_pending_requests())
+                obs.shared_active.set(await repo.count_active_shared())
+            except Exception:
+                log.exception("gauge refresh failed")
+            await asyncio.sleep(60)
+
+    gauge_task = asyncio.create_task(_refresh_gauges())
+
+    dp.update.middleware(_TelegramTickMiddleware(obs))
+
     dp.include_router(make_admin_router(repo, settings, _sync_now))
     dp.include_router(make_start_router(repo, settings))
     dp.include_router(make_request_router(repo, bot, settings))
@@ -83,6 +120,8 @@ async def _run() -> None:
     try:
         await dp.start_polling(bot)
     finally:
+        gauge_task.cancel()
+        await http_runner.cleanup()
         scheduler.shutdown(wait=False)
         await http.aclose()
         await repo.close()
