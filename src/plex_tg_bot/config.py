@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from pydantic import Field, field_validator, model_validator
+from pydantic.fields import FieldInfo
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic_settings.sources import EnvSettingsSource, PydanticBaseSettingsSource
 
@@ -11,12 +12,11 @@ class EnvSettingsSourceNoJsonList(EnvSettingsSource):
     """Custom env settings source that doesn't try to JSON decode list fields."""
 
     def decode_complex_value(
-        self, field_name: str, field_info: Any, value: str
+        self, field_name: str, field: FieldInfo, value: Any
     ) -> Any:
         if field_name == "shared_library_ids":
-            # Don't try JSON decoding, let the validator handle it
             return value
-        return super().decode_complex_value(field_name, field_info, value)
+        return super().decode_complex_value(field_name, field, value)
 
 
 class Settings(BaseSettings):
