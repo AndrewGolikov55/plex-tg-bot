@@ -32,7 +32,7 @@ async def handle_email_text(
     message: types.Message, state: FSMContext
 ) -> None:
     text = (message.text or "").strip()
-    if not is_valid_email(text, check_mx=False):
+    if not is_valid_email(text):
         await message.answer(t("request.invalid_email"))
         return
     await state.update_data(email=text)
