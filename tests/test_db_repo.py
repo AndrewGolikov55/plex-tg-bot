@@ -50,6 +50,30 @@ async def test_rollback_claim(repo: Repo) -> None:
     assert ok_again is True  # back to pending
 
 
+async def test_rollback_claim_does_not_touch_finalized(repo: Repo) -> None:
+    await repo.upsert_user(42, "v", "V", "en")
+    rid = await repo.create_request(42, "v@e.com", "ref", -100, None)
+    await repo.claim_request(rid, decided_by=99, decided_at=int(time.time()))
+    await repo.finalize_approve(rid)
+    await repo.rollback_claim(rid)  # must be a no-op on approved
+    req = await repo.get_request(rid)
+    assert req is not None
+    assert req["status"] == "approved"
+    assert req["decided_by"] == 99
+    assert req["decided_at"] is not None
+
+
+async def test_connect_idempotent(tmp_path: Path) -> None:
+    r = Repo(str(tmp_path / "x.sqlite"))
+    await r.connect()
+    await r.connect()  # second call must be a no-op
+    await r.upsert_user(1, "u", "U", "en")
+    u = await r.get_user(1)
+    assert u is not None
+    await r.close()
+    await r.close()  # second close must be safe
+
+
 async def test_finalize_approve_and_shared_users(repo: Repo) -> None:
     await repo.upsert_user(42, "v", "V", "en")
     rid = await repo.create_request(42, "v@e.com", "ref", -100, None)

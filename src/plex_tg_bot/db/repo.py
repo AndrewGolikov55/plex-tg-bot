@@ -15,19 +15,22 @@ class Repo:
         self._db: aiosqlite.Connection | None = None
 
     async def connect(self) -> None:
+        if self._db is not None:
+            return
         self._db = await aiosqlite.connect(self._path)
         self._db.row_factory = aiosqlite.Row
         await self._db.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
-        await self._db.execute("PRAGMA journal_mode=WAL")
         await self._db.commit()
 
     async def close(self) -> None:
-        if self._db:
+        if self._db is not None:
             await self._db.close()
+            self._db = None
 
     @property
     def db(self) -> aiosqlite.Connection:
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("Repo not connected; call await repo.connect() first")
         return self._db
 
     async def upsert_user(self, telegram_id: int, username: str | None,
@@ -96,7 +99,8 @@ class Repo:
 
     async def rollback_claim(self, request_id: int) -> None:
         await self.db.execute(
-            "UPDATE requests SET decided_by=NULL, decided_at=NULL WHERE id=?",
+            "UPDATE requests SET decided_by=NULL, decided_at=NULL "
+            "WHERE id=? AND status='pending'",
             (request_id,),
         )
         await self.db.commit()
