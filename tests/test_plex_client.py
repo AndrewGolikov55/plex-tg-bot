@@ -128,3 +128,70 @@ async def test_share_server_other_4xx_raises_unreachable(
     respx.post(SHARE_URL).mock(return_value=httpx.Response(status))
     with pytest.raises(PlexUnreachable):
         await plex_client.share_server(**_share_kwargs())  # type: ignore[arg-type]
+
+
+# --- list_shared tests ---
+
+LIST_SHARED_URL = "https://plex.tv/api/v2/shared_servers"
+
+
+@respx.mock
+async def test_list_shared_happy_path(plex_client: PlexClient) -> None:
+    respx.get(LIST_SHARED_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {"invitedEmail": "alice@example.com", "userId": 111},
+                {"email": "bob@example.com", "user": {"id": 222}},
+            ],
+        )
+    )
+    result = await plex_client.list_shared("MACHINEID")
+    assert result == [
+        {"email": "alice@example.com", "plex_user_id": 111},
+        {"email": "bob@example.com", "plex_user_id": 222},
+    ]
+
+
+@respx.mock
+async def test_list_shared_skips_items_without_email(plex_client: PlexClient) -> None:
+    respx.get(LIST_SHARED_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {"invitedEmail": "alice@example.com", "userId": 111},
+                {"userId": 999},
+                {"user": {"id": 888}},
+            ],
+        )
+    )
+    result = await plex_client.list_shared("MACHINEID")
+    assert result == [{"email": "alice@example.com", "plex_user_id": 111}]
+
+
+@respx.mock
+async def test_list_shared_401_raises_auth_error(plex_client: PlexClient) -> None:
+    respx.get(LIST_SHARED_URL).mock(return_value=httpx.Response(401))
+    with pytest.raises(PlexAuthError):
+        await plex_client.list_shared("MACHINEID")
+
+
+@respx.mock
+async def test_list_shared_5xx_raises_unreachable(plex_client: PlexClient) -> None:
+    respx.get(LIST_SHARED_URL).mock(return_value=httpx.Response(503))
+    with pytest.raises(PlexUnreachable):
+        await plex_client.list_shared("MACHINEID")
+
+
+@respx.mock
+async def test_list_shared_network_error_raises_unreachable(plex_client: PlexClient) -> None:
+    respx.get(LIST_SHARED_URL).mock(side_effect=httpx.ConnectError("boom"))
+    with pytest.raises(PlexUnreachable):
+        await plex_client.list_shared("MACHINEID")
+
+
+@respx.mock
+async def test_list_shared_empty_returns_empty_list(plex_client: PlexClient) -> None:
+    respx.get(LIST_SHARED_URL).mock(return_value=httpx.Response(200, json=[]))
+    result = await plex_client.list_shared("MACHINEID")
+    assert result == []

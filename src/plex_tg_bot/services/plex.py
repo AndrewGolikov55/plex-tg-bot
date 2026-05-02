@@ -72,6 +72,27 @@ class PlexClient:
         data = r.json()
         return int(data.get("userId") or data.get("user", {}).get("id") or 0)
 
+    async def list_shared(self, machine_identifier: str) -> list[dict[str, str | int]]:
+        try:
+            r = await self._http.get(
+                f"{self.BASE}/shared_servers",
+                headers=self._headers(),
+                params={"machineIdentifier": machine_identifier},
+            )
+        except httpx.HTTPError as e:
+            raise PlexUnreachable(str(e)) from e
+        if r.status_code == 401:
+            raise PlexAuthError()
+        if r.status_code >= 400:
+            raise PlexUnreachable(f"status {r.status_code}")
+        out: list[dict[str, str | int]] = []
+        for item in r.json():
+            email = item.get("invitedEmail") or item.get("email")
+            uid = int(item.get("userId") or item.get("user", {}).get("id") or 0)
+            if email:
+                out.append({"email": email, "plex_user_id": uid})
+        return out
+
     async def discover_server(self) -> tuple[str, str]:
         r = await self._http.get(
             f"{self.BASE}/resources",
