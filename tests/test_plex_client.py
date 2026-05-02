@@ -118,3 +118,13 @@ async def test_share_server_network_error_raises_unreachable(plex_client: PlexCl
     respx.post(SHARE_URL).mock(side_effect=httpx.ConnectError("boom"))
     with pytest.raises(PlexUnreachable):
         await plex_client.share_server(**_share_kwargs())  # type: ignore[arg-type]
+
+
+@respx.mock
+@pytest.mark.parametrize("status", [400, 403, 404, 429])
+async def test_share_server_other_4xx_raises_unreachable(
+    plex_client: PlexClient, status: int
+) -> None:
+    respx.post(SHARE_URL).mock(return_value=httpx.Response(status))
+    with pytest.raises(PlexUnreachable):
+        await plex_client.share_server(**_share_kwargs())  # type: ignore[arg-type]

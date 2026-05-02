@@ -63,12 +63,12 @@ class PlexClient:
             try:
                 data = r.json()
                 uid = int(data.get("userId") or 0)
-            except Exception:
+            except (ValueError, TypeError, AttributeError):
                 uid = 0
             raise PlexAlreadyShared(uid)
-        if r.status_code >= 500:
+        if r.status_code >= 400:
+            # any other 4xx/5xx is treated as transient — Phase 7 will rollback
             raise PlexUnreachable(f"status {r.status_code}")
-        r.raise_for_status()
         data = r.json()
         return int(data.get("userId") or data.get("user", {}).get("id") or 0)
 
