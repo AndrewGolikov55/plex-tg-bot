@@ -5,6 +5,7 @@ import logging
 
 from plex_tg_bot import __version__
 from plex_tg_bot.bot.approve import make_approve_router
+from plex_tg_bot.bot.apps import make_apps_router
 from plex_tg_bot.bot.factory import make_bot_and_dispatcher
 from plex_tg_bot.bot.request import make_request_router
 from plex_tg_bot.bot.start import make_start_router
@@ -55,6 +56,7 @@ async def _run() -> None:
     dp.include_router(make_start_router(repo, settings))
     dp.include_router(make_request_router(repo, bot, settings))
     dp.include_router(make_approve_router(repo, bot, settings, plex, overseerr))
+    dp.include_router(make_apps_router(repo, settings))
     try:
         await dp.start_polling(bot)
     finally:

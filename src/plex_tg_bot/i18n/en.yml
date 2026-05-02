@@ -9,6 +9,7 @@ request:
   submitted: "⏳ Request submitted. I'll message you once an admin decides."
   already_have_access: "You already have access."
   already_pending: "Your previous request is still pending."
+  access_required: "Please request access first via /request."
 admin:
   request_card: |-
     📥 Access request
