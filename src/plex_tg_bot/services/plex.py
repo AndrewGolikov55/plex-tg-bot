@@ -30,6 +30,48 @@ class PlexClient:
             "Accept": "application/json",
         }
 
+    async def share_server(
+        self,
+        machine_identifier: str,
+        email: str,
+        library_section_ids: list[int],
+        allow_sync: str,
+        allow_camera_upload: str,
+        allow_channels: str,
+    ) -> int:
+        body = {
+            "machineIdentifier": machine_identifier,
+            "invitedEmail": email,
+            "librarySectionIds": library_section_ids,
+            "settings": {
+                "allowSync": allow_sync,
+                "allowCameraUpload": allow_camera_upload,
+                "allowChannels": allow_channels,
+            },
+        }
+        try:
+            r = await self._http.post(
+                f"{self.BASE}/shared_servers",
+                headers={**self._headers(), "Content-Type": "application/json"},
+                json=body,
+            )
+        except httpx.HTTPError as e:
+            raise PlexUnreachable(str(e)) from e
+        if r.status_code == 401:
+            raise PlexAuthError()
+        if r.status_code == 422:
+            try:
+                data = r.json()
+                uid = int(data.get("userId") or 0)
+            except Exception:
+                uid = 0
+            raise PlexAlreadyShared(uid)
+        if r.status_code >= 500:
+            raise PlexUnreachable(f"status {r.status_code}")
+        r.raise_for_status()
+        data = r.json()
+        return int(data.get("userId") or data.get("user", {}).get("id") or 0)
+
     async def discover_server(self) -> tuple[str, str]:
         r = await self._http.get(
             f"{self.BASE}/resources",

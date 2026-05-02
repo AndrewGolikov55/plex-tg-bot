@@ -2,7 +2,9 @@ import httpx
 import pytest
 import respx
 
-from plex_tg_bot.services.plex import PlexClient
+from plex_tg_bot.services.plex import PlexAlreadyShared, PlexAuthError, PlexClient, PlexUnreachable
+
+SHARE_URL = "https://plex.tv/api/v2/shared_servers"
 
 
 @pytest.fixture
@@ -12,6 +14,17 @@ def plex_client() -> PlexClient:
         client_identifier="plex-tg-bot/0.1.0",
         http=httpx.AsyncClient(),
     )
+
+
+def _share_kwargs() -> dict[str, object]:
+    return {
+        "machine_identifier": "MACHINEID",
+        "email": "user@example.com",
+        "library_section_ids": [1, 2],
+        "allow_sync": "0",
+        "allow_camera_upload": "0",
+        "allow_channels": "0",
+    }
 
 
 @respx.mock
@@ -37,3 +50,71 @@ async def test_discover_server_picks_owned(plex_client: PlexClient) -> None:
     )
     out = await plex_client.discover_server()
     assert out == ("MID", "Mine")
+
+
+# --- share_server tests ---
+
+
+@respx.mock
+async def test_share_server_success_user_id(plex_client: PlexClient) -> None:
+    respx.post(SHARE_URL).mock(return_value=httpx.Response(200, json={"userId": 1234}))
+    uid = await plex_client.share_server(**_share_kwargs())  # type: ignore[arg-type]
+    assert uid == 1234
+
+
+@respx.mock
+async def test_share_server_success_user_id_nested(plex_client: PlexClient) -> None:
+    respx.post(SHARE_URL).mock(
+        return_value=httpx.Response(200, json={"user": {"id": 5678}})
+    )
+    uid = await plex_client.share_server(**_share_kwargs())  # type: ignore[arg-type]
+    assert uid == 5678
+
+
+@respx.mock
+async def test_share_server_422_with_user_id(plex_client: PlexClient) -> None:
+    respx.post(SHARE_URL).mock(return_value=httpx.Response(422, json={"userId": 7}))
+    with pytest.raises(PlexAlreadyShared) as exc_info:
+        await plex_client.share_server(**_share_kwargs())  # type: ignore[arg-type]
+    assert exc_info.value.args[0] == 7
+
+
+@respx.mock
+async def test_share_server_422_without_user_id(plex_client: PlexClient) -> None:
+    respx.post(SHARE_URL).mock(return_value=httpx.Response(422, json={"error": "already shared"}))
+    with pytest.raises(PlexAlreadyShared) as exc_info:
+        await plex_client.share_server(**_share_kwargs())  # type: ignore[arg-type]
+    assert exc_info.value.args[0] == 0
+
+
+@respx.mock
+async def test_share_server_422_non_json(plex_client: PlexClient) -> None:
+    respx.post(SHARE_URL).mock(
+        return_value=httpx.Response(
+            422, content=b"not json", headers={"Content-Type": "text/plain"}
+        )
+    )
+    with pytest.raises(PlexAlreadyShared) as exc_info:
+        await plex_client.share_server(**_share_kwargs())  # type: ignore[arg-type]
+    assert exc_info.value.args[0] == 0
+
+
+@respx.mock
+async def test_share_server_401_raises_auth_error(plex_client: PlexClient) -> None:
+    respx.post(SHARE_URL).mock(return_value=httpx.Response(401))
+    with pytest.raises(PlexAuthError):
+        await plex_client.share_server(**_share_kwargs())  # type: ignore[arg-type]
+
+
+@respx.mock
+async def test_share_server_5xx_raises_unreachable(plex_client: PlexClient) -> None:
+    respx.post(SHARE_URL).mock(return_value=httpx.Response(503))
+    with pytest.raises(PlexUnreachable):
+        await plex_client.share_server(**_share_kwargs())  # type: ignore[arg-type]
+
+
+@respx.mock
+async def test_share_server_network_error_raises_unreachable(plex_client: PlexClient) -> None:
+    respx.post(SHARE_URL).mock(side_effect=httpx.ConnectError("boom"))
+    with pytest.raises(PlexUnreachable):
+        await plex_client.share_server(**_share_kwargs())  # type: ignore[arg-type]
