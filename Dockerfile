@@ -1,9 +1,8 @@
 FROM python:3.12-slim AS build
 RUN pip install --no-cache-dir uv
 WORKDIR /app
-COPY pyproject.toml ./
+COPY pyproject.toml README.md ./
 COPY src ./src
-RUN echo "# plex-tg-bot" > README.md
 RUN uv pip install --system --no-cache .
 
 FROM python:3.12-slim
