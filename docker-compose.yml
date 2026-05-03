@@ -12,7 +12,6 @@ services:
       - OVERSEERR_PUBLIC_URL=${OVERSEERR_PUBLIC_URL:-}
       - OVERSEERR_API_KEY=${OVERSEERR_API_KEY:-}
       - WATCH_URL=${WATCH_URL:-https://app.plex.tv/desktop/}
-      - APPS_MARKDOWN_PATH=${APPS_MARKDOWN_PATH:-/data/apps.md}
       - DB_PATH=${DB_PATH:-/data/db.sqlite}
       - BOT_LANG=${BOT_LANG:-en}
       - PROXY_URL=${PROXY_URL:-}

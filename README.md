@@ -34,9 +34,9 @@ docker compose up -d
 docker compose logs -f
 ```
 
-The bot starts on host port `9095` exposing `/healthz` and `/metrics`. State (sqlite + your `apps.md`) lives in `./data`.
+The bot starts on host port `9095` exposing `/healthz` and `/metrics`. SQLite state lives in `./data/db.sqlite`.
 
-To customize the apps screen, drop a `data/apps.md` (start from `examples/apps.example.md`).
+To customize the apps screen, edit `src/plex_tg_bot/i18n/apps/<lang>.html` in your fork (or open a PR).
 
 ### B. Portainer (GitOps)
 
@@ -81,7 +81,6 @@ All configuration is via environment variables. See `.env.example` for the full 
 | `OVERSEERR_PUBLIC_URL` | no | — | When unset, the Overseerr button is hidden |
 | `OVERSEERR_API_KEY` | conditional | — | Required when `OVERSEERR_PUBLIC_URL` is set |
 | `WATCH_URL` | no | `https://app.plex.tv/desktop/` | "Watch in browser" link |
-| `APPS_MARKDOWN_PATH` | no | `/data/apps.md` | Bind-mounted markdown for the apps screen |
 | `DB_PATH` | no | `/data/db.sqlite` | SQLite database location |
 | `BOT_LANG` | no | `en` | `en` or `ru` |
 | `PROXY_URL` | no | — | e.g. `socks5://192.168.0.1:1080` or `http://proxy:7890` |
@@ -96,13 +95,13 @@ All configuration is via environment variables. See `.env.example` for the full 
 
 ## Customization
 
-### `apps.md`
+### Apps screen
 
-This is the message users see when they tap "Get apps". Fill it with platform-specific instructions, deep links, screenshots, or anything Markdown-formatted. See `examples/apps.example.md`.
+The "Get apps" message is loaded at runtime from `src/plex_tg_bot/i18n/apps/<lang>.html` (Telegram-flavoured HTML, baked into the image). To customize: edit the file in your fork or open a PR. To add a new language: drop a new `<lang>.html` next to the existing files; the locale parity test will pick it up.
 
 ### Locales
 
-`src/plex_tg_bot/i18n/<lang>.yml` — add a new file with the same keys as `en.yml`, set `BOT_LANG=<lang>`, and you're done. PRs welcome.
+`src/plex_tg_bot/i18n/<lang>.yml` plus `src/plex_tg_bot/i18n/apps/<lang>.html` — add a new pair (matching the keys in `en.yml`) and set `BOT_LANG=<lang>`. PRs welcome.
 
 ## Architecture
 
