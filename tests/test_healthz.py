@@ -29,18 +29,21 @@ async def test_healthz_ok_when_recent(client: TestClient) -> None:
     assert body["status"] == "ok"
 
 
-async def test_healthz_stale_returns_503() -> None:
+async def test_healthz_ok_even_when_idle() -> None:
+    """Idle bot (no Telegram updates for >10 min) must NOT fail healthcheck —
+    the endpoint is liveness only. Otherwise Docker / Alertmanager flap on
+    every quiet period."""
     obs = Observability()
-    obs.last_tg_update.set(time.time() - 700)  # stale
+    obs.last_tg_update.set(time.time() - 86400)  # one day idle
     app = make_http_app(obs)
     server = TestServer(app)
     tc = TestClient(server)
     await tc.start_server()
     try:
         r = await tc.get("/healthz")
-        assert r.status == 503
+        assert r.status == 200
         body = await r.json()
-        assert body["status"] == "stale"
+        assert body["status"] == "ok"
     finally:
         await tc.close()
 

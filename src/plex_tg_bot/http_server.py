@@ -11,8 +11,6 @@ from prometheus_client import (
     generate_latest,
 )
 
-_STALE_S = 600
-
 
 class Observability:
     def __init__(self) -> None:
@@ -71,12 +69,13 @@ class Observability:
 
 def make_http_app(obs: Observability) -> web.Application:
     async def healthz(request: web.Request) -> web.Response:
-        last = obs.last_tg_update_ts()
-        if time.time() - last > _STALE_S:
-            return web.json_response(
-                {"status": "stale", "last_tg_update": last}, status=503
-            )
-        return web.json_response({"status": "ok", "last_tg_update": last})
+        # Liveness only: if this handler runs, the asyncio loop and aiohttp
+        # server are alive. last_tg_update is exposed for observability but
+        # NOT a failure signal — the bot may legitimately be idle for hours
+        # between user messages.
+        return web.json_response(
+            {"status": "ok", "last_tg_update": obs.last_tg_update_ts()}
+        )
 
     async def metrics(request: web.Request) -> web.Response:
         return web.Response(

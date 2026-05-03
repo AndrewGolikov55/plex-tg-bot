@@ -4,6 +4,14 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.4] - 2026-05-04
+
+### Fixed
+- `/healthz` no longer returns 503 when the bot is just idle. Previously the endpoint flagged "stale" if no Telegram Update arrived within 600s, which falsely flapped Docker health and Alertmanager every ~10 minutes during quiet periods. The endpoint is now liveness-only — if the asyncio loop and aiohttp server can answer, status is `ok`. The `plexbot_telegram_last_update_ts` gauge stays in `/metrics` and in the JSON body for visibility, but does not gate the response code.
+
+### Internal
+- Dropped the `_STALE_S` constant from `http_server.py` and renamed `test_healthz_stale_returns_503` → `test_healthz_ok_even_when_idle`.
+
 ## [0.3.3] - 2026-05-03
 
 ### Changed
