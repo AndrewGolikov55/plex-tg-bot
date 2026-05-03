@@ -28,6 +28,26 @@ async def handle_request_cmd(
     await message.answer(t("request.ask_email"))
 
 
+async def handle_request_callback(
+    cq: types.CallbackQuery, state: FSMContext, repo: Repo
+) -> None:
+    u = cq.from_user
+    if u is None or cq.message is None:
+        await cq.answer()
+        return
+    if await repo.has_active_access(u.id):
+        await cq.message.answer(t("request.already_have_access"))
+        await cq.answer()
+        return
+    if await repo.get_pending_request_for_user(u.id):
+        await cq.message.answer(t("request.already_pending"))
+        await cq.answer()
+        return
+    await state.set_state(RequestFSM.awaiting_email)
+    await cq.message.answer(t("request.ask_email"))
+    await cq.answer()
+
+
 async def handle_email_text(
     message: types.Message, state: FSMContext
 ) -> None:
@@ -91,6 +111,10 @@ def make_request_router(repo: Repo, bot: Bot, settings: Settings) -> Router:
     @router.message(Command("request"))
     async def _on_request(message: types.Message, state: FSMContext) -> None:
         await handle_request_cmd(message, state, repo)
+
+    @router.callback_query(F.data == "request:start")
+    async def _on_request_cb(cq: types.CallbackQuery, state: FSMContext) -> None:
+        await handle_request_callback(cq, state, repo)
 
     @router.message(StateFilter(RequestFSM.awaiting_email), F.text)
     async def _on_email(message: types.Message, state: FSMContext) -> None:

@@ -10,6 +10,7 @@ import pytest
 from plex_tg_bot.bot.request import (
     handle_email_text,
     handle_referrer_text,
+    handle_request_callback,
     handle_request_cmd,
 )
 from plex_tg_bot.bot.states import RequestFSM
@@ -144,6 +145,46 @@ async def test_request_starts_email_collection(repo: Repo, settings: Settings) -
 
     assert msg.answer_calls[-1][0] == t("request.ask_email")
     assert fsm.state() == RequestFSM.awaiting_email
+
+
+class MockCallbackQuery:
+    def __init__(self, tg_id: int) -> None:
+        self.from_user = SimpleNamespace(
+            id=tg_id, username="vasya", first_name="Vasya", last_name=""
+        )
+        self.message = MockMessage(tg_id)
+        self.data = "request:start"
+        self.answer_calls: list[dict[str, object]] = []
+
+    async def answer(self, text: str | None = None, show_alert: bool = False) -> None:
+        self.answer_calls.append({"text": text, "show_alert": show_alert})
+
+
+async def test_request_callback_starts_email_collection(repo: Repo, settings: Settings) -> None:
+    """Inline-button 'request:start' triggers the same flow as /request."""
+    cq = MockCallbackQuery(42)
+    fsm = FakeFSM()
+    await handle_request_callback(cq, fsm, repo)  # type: ignore[arg-type]
+
+    assert cq.message.answer_calls[-1][0] == t("request.ask_email")
+    assert fsm.state() == RequestFSM.awaiting_email
+    # spinner dismissed
+    assert len(cq.answer_calls) == 1
+
+
+async def test_request_callback_already_has_access(repo: Repo, settings: Settings) -> None:
+    """Callback respects existing access — same gating as the command handler."""
+    await repo.upsert_user(42, "v", "V", "en")
+    now = int(time.time())
+    await repo.upsert_shared_user("v@e.com", 42, 1, now, now)
+
+    cq = MockCallbackQuery(42)
+    fsm = FakeFSM()
+    await handle_request_callback(cq, fsm, repo)  # type: ignore[arg-type]
+
+    assert cq.message.answer_calls[-1][0] == t("request.already_have_access")
+    assert fsm.state() is None
+    assert len(cq.answer_calls) == 1
 
 
 async def test_email_invalid_stays_in_state() -> None:
