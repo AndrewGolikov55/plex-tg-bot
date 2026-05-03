@@ -4,6 +4,21 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-05-04
+
+### Added
+- Post-approve DM now includes a clickable [🌐 Accept invite] button when Plex returns a per-share `inviteToken`. The button links to `https://app.plex.tv/desktop/#!/sharing-invite?inviteToken=<...>` — the same accept URL Plex Web's "Copy link" produces. Users no longer need to dig through email.
+- DM text is a 3-step onboarding walkthrough: how to log in, how the server appears, and a warning that Plex's setup screen pushes alien libraries (Watchlist, Live TV, Movies & Shows) that should be unchecked.
+- Apps screen accessible directly from the DM via [📱 Get apps] callback button.
+- Graceful fallback when Plex didn't surface the token (rare): the DM falls back to text-only instructions referencing the email link.
+
+### Changed
+- **BREAKING (internal API):** `PlexClient.share_server()` now returns `tuple[int, str | None]` — the existing `plex_user_id` plus the new `invite_token`. `PlexAlreadyShared` exception now carries `(uid, invite_token)` in `.args`.
+- `notify_user.approved` i18n key replaced with a multi-line walkthrough text. New keys: `notify_user.approved_no_token`, `notify_user.accept_invite_button`, `notify_user.apps_button`.
+
+### Internal
+- `_do_approve` performs a `list_shared` fallback when `share_server`'s POST response does not surface `inviteToken`. Empirically Plex returns it on POST in most cases; the fallback handles the rare miss without an extra API call in the happy path.
+
 ## [0.3.5] - 2026-05-04
 
 ### Fixed
