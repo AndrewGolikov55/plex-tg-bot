@@ -89,9 +89,33 @@ class PlexClient:
         for item in r.json():
             email = item.get("invitedEmail") or item.get("email")
             uid = int(item.get("userId") or item.get("user", {}).get("id") or 0)
+            sid = int(item.get("id") or 0)
             if email:
-                out.append({"email": email, "plex_user_id": uid})
+                out.append({"id": sid, "email": email, "plex_user_id": uid})
         return out
+
+    async def revoke_share(self, machine_identifier: str, email: str) -> None:
+        """Look up the shared_server for `email` and DELETE it.
+        No-op if the user isn't currently shared. Raises PlexAuthError on 401
+        or PlexUnreachable on transport / 5xx errors."""
+        items = await self.list_shared(machine_identifier)
+        target = next((it for it in items if it.get("email") == email), None)
+        if target is None:
+            return
+        sid = int(target["id"])
+        try:
+            r = await self._http.delete(
+                f"{self.BASE}/shared_servers/{sid}",
+                headers=self._headers(),
+            )
+        except httpx.HTTPError as e:
+            raise PlexUnreachable(str(e)) from e
+        if r.status_code == 401:
+            raise PlexAuthError()
+        if r.status_code == 404:
+            return
+        if r.status_code >= 400:
+            raise PlexUnreachable(f"status {r.status_code}")
 
     async def discover_server(self) -> tuple[str, str]:
         r = await self._http.get(

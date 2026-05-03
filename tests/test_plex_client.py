@@ -141,15 +141,15 @@ async def test_list_shared_happy_path(plex_client: PlexClient) -> None:
         return_value=httpx.Response(
             200,
             json=[
-                {"invitedEmail": "alice@example.com", "userId": 111},
-                {"email": "bob@example.com", "user": {"id": 222}},
+                {"id": 11, "invitedEmail": "alice@example.com", "userId": 111},
+                {"id": 12, "email": "bob@example.com", "user": {"id": 222}},
             ],
         )
     )
     result = await plex_client.list_shared("MACHINEID")
     assert result == [
-        {"email": "alice@example.com", "plex_user_id": 111},
-        {"email": "bob@example.com", "plex_user_id": 222},
+        {"id": 11, "email": "alice@example.com", "plex_user_id": 111},
+        {"id": 12, "email": "bob@example.com", "plex_user_id": 222},
     ]
 
 
@@ -166,7 +166,7 @@ async def test_list_shared_skips_items_without_email(plex_client: PlexClient) ->
         )
     )
     result = await plex_client.list_shared("MACHINEID")
-    assert result == [{"email": "alice@example.com", "plex_user_id": 111}]
+    assert result == [{"id": 0, "email": "alice@example.com", "plex_user_id": 111}]
 
 
 @respx.mock
@@ -195,3 +195,102 @@ async def test_list_shared_empty_returns_empty_list(plex_client: PlexClient) -> 
     respx.get(LIST_SHARED_URL).mock(return_value=httpx.Response(200, json=[]))
     result = await plex_client.list_shared("MACHINEID")
     assert result == []
+
+
+# --- revoke_share tests ---
+
+
+@respx.mock
+async def test_revoke_share_happy_path(plex_client: PlexClient) -> None:
+    respx.get(LIST_SHARED_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json=[{"id": 42, "invitedEmail": "vasya@example.com", "userId": 1}],
+        )
+    )
+    delete_route = respx.delete("https://plex.tv/api/v2/shared_servers/42").mock(
+        return_value=httpx.Response(200)
+    )
+    await plex_client.revoke_share("MACHINEID", "vasya@example.com")
+    assert delete_route.called
+
+
+@respx.mock
+async def test_revoke_share_email_absent_from_list_is_noop(
+    plex_client: PlexClient,
+) -> None:
+    respx.get(LIST_SHARED_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json=[{"id": 42, "invitedEmail": "alice@example.com", "userId": 1}],
+        )
+    )
+    delete_route = respx.delete(url__regex=r".+/shared_servers/.+").mock(
+        return_value=httpx.Response(200)
+    )
+    await plex_client.revoke_share("MACHINEID", "vasya@example.com")
+    assert not delete_route.called
+
+
+@respx.mock
+async def test_revoke_share_404_on_delete_treated_as_success(
+    plex_client: PlexClient,
+) -> None:
+    respx.get(LIST_SHARED_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json=[{"id": 42, "invitedEmail": "vasya@example.com", "userId": 1}],
+        )
+    )
+    respx.delete("https://plex.tv/api/v2/shared_servers/42").mock(
+        return_value=httpx.Response(404)
+    )
+    await plex_client.revoke_share("MACHINEID", "vasya@example.com")  # no raise
+
+
+@respx.mock
+async def test_revoke_share_401_raises_auth_error(plex_client: PlexClient) -> None:
+    respx.get(LIST_SHARED_URL).mock(return_value=httpx.Response(401))
+    with pytest.raises(PlexAuthError):
+        await plex_client.revoke_share("MACHINEID", "vasya@example.com")
+
+
+@respx.mock
+async def test_revoke_share_5xx_on_list_raises_unreachable(
+    plex_client: PlexClient,
+) -> None:
+    respx.get(LIST_SHARED_URL).mock(return_value=httpx.Response(503))
+    with pytest.raises(PlexUnreachable):
+        await plex_client.revoke_share("MACHINEID", "vasya@example.com")
+
+
+@respx.mock
+async def test_revoke_share_5xx_on_delete_raises_unreachable(
+    plex_client: PlexClient,
+) -> None:
+    respx.get(LIST_SHARED_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json=[{"id": 42, "invitedEmail": "vasya@example.com", "userId": 1}],
+        )
+    )
+    respx.delete("https://plex.tv/api/v2/shared_servers/42").mock(
+        return_value=httpx.Response(503)
+    )
+    with pytest.raises(PlexUnreachable):
+        await plex_client.revoke_share("MACHINEID", "vasya@example.com")
+
+
+@respx.mock
+async def test_revoke_share_network_error_on_delete(plex_client: PlexClient) -> None:
+    respx.get(LIST_SHARED_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json=[{"id": 42, "invitedEmail": "vasya@example.com", "userId": 1}],
+        )
+    )
+    respx.delete("https://plex.tv/api/v2/shared_servers/42").mock(
+        side_effect=httpx.ConnectError("boom")
+    )
+    with pytest.raises(PlexUnreachable):
+        await plex_client.revoke_share("MACHINEID", "vasya@example.com")
