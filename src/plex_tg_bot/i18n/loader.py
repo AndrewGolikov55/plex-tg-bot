@@ -8,6 +8,20 @@ import yaml
 _LOCALES: dict[str, dict[str, str]] = {}
 _LANG: str = "en"
 _DIR = Path(__file__).resolve().parent
+_APPS_DIR = _DIR / "apps"
+
+
+def load_apps(lang: str) -> str:
+    """Read the Telegram-HTML apps content for the given locale.
+
+    Raises FileNotFoundError with a clear message if the file is missing —
+    bot startup calls this eagerly so misconfiguration fails fast."""
+    path = _APPS_DIR / f"{lang}.html"
+    if not path.exists():
+        raise FileNotFoundError(
+            f"apps content for locale '{lang}' is missing: expected {path}"
+        )
+    return path.read_text(encoding="utf-8")
 
 
 def _flatten(d: dict[str, Any], prefix: str = "") -> dict[str, str]:

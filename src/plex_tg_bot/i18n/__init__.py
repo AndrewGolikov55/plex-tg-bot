@@ -1,3 +1,3 @@
-from .loader import set_lang, t
+from .loader import load_apps, set_lang, t
 
-__all__ = ["t", "set_lang"]
+__all__ = ["load_apps", "set_lang", "t"]

@@ -24,7 +24,7 @@ from plex_tg_bot.bot.watch import make_watch_router
 from plex_tg_bot.config import Settings
 from plex_tg_bot.db import Repo
 from plex_tg_bot.http_server import Observability, make_http_app, start_http_server
-from plex_tg_bot.i18n import set_lang
+from plex_tg_bot.i18n import load_apps, set_lang
 from plex_tg_bot.jobs.daily_sync import run_daily_sync
 from plex_tg_bot.services.http import make_async_client
 from plex_tg_bot.services.overseerr import OverseerrClient
@@ -51,6 +51,8 @@ async def _run() -> None:
     settings = Settings()  # type: ignore[call-arg]
     logging.basicConfig(level=settings.log_level)
     set_lang(settings.bot_lang)
+    # Fail-fast: refuse to start if apps content for this locale isn't shipped.
+    load_apps(settings.bot_lang)
 
     repo = Repo(settings.db_path)
     await repo.connect()
