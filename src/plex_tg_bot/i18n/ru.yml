@@ -21,13 +21,31 @@ admin:
   ask_reject_reason: "@{admin}, ответь на это сообщение с причиной отказа или отправь /skip."
   already_handled: "Уже обработано администратором @{admin}"
   not_authorized: "Нет доступа."
-  list_header: "Пользователи:"
-  pending_header: "Заявки на рассмотрении:"
   sync_done: "Ежедневная синхронизация завершена. Активных: {active}, отозвано: {revoked}."
+  panel_title: "🛠 Админ-панель"
+  users_button: "👥 Пользователи"
+  pending_button: "⏳ Заявки"
+  sync_button: "🔄 Синхронизировать"
+  back_button: "⬅ Назад"
+  users_header: "👥 Пользователи (страница {page}/{total_pages}, всего {total})"
+  users_empty: "Пользователей пока нет."
+  pending_header_paginated: "⏳ Заявки (страница {page}/{total_pages}, всего {total})"
+  pending_empty: "Нет заявок на рассмотрении."
+  remove_confirm: |-
+    Удалить {email} из Plex?
+
+    Доступ будет отозван в Plex и пользователь удалён из БД бота.
+  remove_yes: "✅ Да, удалить"
+  remove_cancel: "❌ Отмена"
+  remove_success: "✅ {email} удалён."
+  remove_plex_unreachable: "❌ Plex недоступен, попробуй позже. Пользователь НЕ удалён."
+  remove_not_found: "Пользователь не найден в БД."
+  retry_button: "🔄 Повторить"
 notify_user:
   approved: "✅ Готово! Приглашение отправлено на {email}. Прими его из почты, после чего /start покажет новое меню."
   rejected: "❌ Твоя заявка отклонена.\nПричина: {reason}"
   rejected_no_reason: "❌ Твоя заявка отклонена."
+  revoked: "❌ Твой доступ к Plex был отозван администратором."
 menu:
   request_access: "📥 Запросить доступ к Plex"
   apps: "📱 Скачать приложения"
@@ -41,5 +59,3 @@ errors:
   plex_temporary: "Plex недоступен, попробуй позже"
   internal: "Внутренняя ошибка. Администратор уведомлён."
   feature_disabled: "Эта функция не настроена администратором."
-apps:
-  fallback: "Скачай Plex по ссылке: {url}"

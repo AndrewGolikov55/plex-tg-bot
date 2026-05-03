@@ -21,13 +21,31 @@ admin:
   ask_reject_reason: "@{admin}, please reply to this message with the rejection reason, or send /skip."
   already_handled: "Already handled by @{admin}"
   not_authorized: "Not authorized."
-  list_header: "Users:"
-  pending_header: "Pending requests:"
   sync_done: "Daily sync finished. Active: {active}, revoked: {revoked}."
+  panel_title: "🛠 Admin panel"
+  users_button: "👥 Users"
+  pending_button: "⏳ Pending"
+  sync_button: "🔄 Sync now"
+  back_button: "⬅ Back"
+  users_header: "👥 Users (page {page}/{total_pages}, total {total})"
+  users_empty: "No users yet."
+  pending_header_paginated: "⏳ Pending (page {page}/{total_pages}, total {total})"
+  pending_empty: "No pending requests."
+  remove_confirm: |-
+    Remove {email} from Plex?
+
+    This revokes their access on Plex and deletes them from the bot DB.
+  remove_yes: "✅ Yes, remove"
+  remove_cancel: "❌ Cancel"
+  remove_success: "✅ {email} removed."
+  remove_plex_unreachable: "❌ Plex unreachable, try again later. The user has NOT been removed."
+  remove_not_found: "User not found in DB."
+  retry_button: "🔄 Retry"
 notify_user:
   approved: "✅ Done! An invite was sent to {email}. Accept it from your inbox, then /start will show the new menu."
   rejected: "❌ Your request was rejected.\nReason: {reason}"
   rejected_no_reason: "❌ Your request was rejected."
+  revoked: "❌ Your access to Plex has been revoked by the admin."
 menu:
   request_access: "📥 Request access to Plex"
   apps: "📱 Get apps"
@@ -41,5 +59,3 @@ errors:
   plex_temporary: "Plex unreachable, try again later"
   internal: "Internal error. Admin has been notified."
   feature_disabled: "This feature is not configured by the admin."
-apps:
-  fallback: "Download Plex from {url}"
