@@ -38,7 +38,7 @@ class PlexClient:
         allow_sync: str,
         allow_camera_upload: str,
         allow_channels: str,
-    ) -> int:
+    ) -> tuple[int, str | None]:
         body = {
             "machineIdentifier": machine_identifier,
             "invitedEmail": email,
@@ -63,14 +63,18 @@ class PlexClient:
             try:
                 data = r.json()
                 uid = int(data.get("userId") or 0)
+                token = data.get("inviteToken")
             except (ValueError, TypeError, AttributeError):
                 uid = 0
-            raise PlexAlreadyShared(uid)
+                token = None
+            raise PlexAlreadyShared(uid, token)
         if r.status_code >= 400:
             # any other 4xx/5xx is treated as transient — Phase 7 will rollback
             raise PlexUnreachable(f"status {r.status_code}")
         data = r.json()
-        return int(data.get("userId") or data.get("user", {}).get("id") or 0)
+        uid = int(data.get("userId") or data.get("user", {}).get("id") or 0)
+        token = data.get("inviteToken")
+        return (uid, token)
 
     async def list_shared(
         self, machine_identifier: str

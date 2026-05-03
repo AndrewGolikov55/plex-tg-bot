@@ -42,25 +42,28 @@ class FakeBot:
     ) -> None:
         self.edits.append({"chat_id": chat_id, "message_id": message_id, "text": text})
 
-    async def send_message(self, chat_id: int, text: str) -> None:
-        self.sent.append({"chat_id": chat_id, "text": text})
+    async def send_message(self, chat_id: int, text: str, reply_markup: object = None) -> None:
+        self.sent.append({"chat_id": chat_id, "text": text, "reply_markup": reply_markup})
 
 
 class FakePlex:
     def __init__(
         self,
         share_side_effect: BaseException | None = None,
-        share_return: int = 1234,
+        share_return: tuple[int, str | None] = (1234, "test-invite-token"),
     ) -> None:
         self.share_calls: list[dict[str, object]] = []
         self._side_effect = share_side_effect
         self._return = share_return
 
-    async def share_server(self, **kwargs: object) -> int:
+    async def share_server(self, **kwargs: object) -> tuple[int, str | None]:
         self.share_calls.append(kwargs)
         if self._side_effect is not None:
             raise self._side_effect
         return self._return
+
+    async def list_shared(self, machine_identifier: str) -> list[dict[str, object]]:
+        return []
 
 
 class FakeOverseerr:
@@ -131,7 +134,7 @@ async def test_approve_happy_path(repo: Repo, settings: Settings) -> None:
     rid = await _seed_request(repo)
     await _seed_server_cache(repo)
 
-    plex = FakePlex(share_return=1234)
+    plex = FakePlex(share_return=(1234, "test-invite-token"))
     overseerr = FakeOverseerr()
     bot = FakeBot()
     cq = FakeCQ(data=f"approve:{rid}")
@@ -163,10 +166,22 @@ async def test_approve_happy_path(repo: Repo, settings: Settings) -> None:
     assert t("admin.approved_by", admin="@admin1", time="") in str(edit["text"]) or \
         "@admin1" in str(edit["text"])
 
-    # DM sent to the user
+    # DM sent to the user — check text and inline keyboard
     assert len(bot.sent) == 1
-    assert "vasya@example.com" in str(bot.sent[0]["text"])
-    assert t("notify_user.approved", email="vasya@example.com") == str(bot.sent[0]["text"])
+    dm = bot.sent[0]
+    assert dm["chat_id"] == 42
+    assert "vasya@example.com" in str(dm["text"])
+    # Should use approved (with token) variant — check for server name
+    assert "MyPlex" in str(dm["text"])
+    # Keyboard must have Accept invite URL button with the token
+    markup = dm["reply_markup"]
+    assert markup is not None
+    buttons = [b for row in markup.inline_keyboard for b in row]
+    urls = [b.url for b in buttons if b.url]
+    assert any("test-invite-token" in u for u in urls)
+    # apps:show callback button present
+    callbacks = [b.callback_data for b in buttons if b.callback_data]
+    assert "apps:show" in callbacks
 
     # cq.answer called (no show_alert)
     assert len(cq.answer_calls) >= 1
@@ -239,7 +254,7 @@ async def test_approve_no_overseerr(repo: Repo, settings: Settings) -> None:
     rid = await _seed_request(repo)
     await _seed_server_cache(repo)
 
-    plex = FakePlex(share_return=1234)
+    plex = FakePlex(share_return=(1234, "test-invite-token"))
     bot = FakeBot()
     cq = FakeCQ(data=f"approve:{rid}")
 
@@ -262,7 +277,7 @@ async def test_approve_overseerr_fails_does_not_block(
     rid = await _seed_request(repo)
     await _seed_server_cache(repo)
 
-    plex = FakePlex(share_return=1234)
+    plex = FakePlex(share_return=(1234, "test-invite-token"))
     overseerr = FakeOverseerr(side_effect=OverseerrError("timeout"))
     bot = FakeBot()
     cq = FakeCQ(data=f"approve:{rid}")
@@ -290,7 +305,7 @@ async def test_approve_used_timestamp_not_zero(repo: Repo, settings: Settings) -
     rid = await _seed_request(repo)
     await _seed_server_cache(repo)
 
-    plex = FakePlex(share_return=1234)
+    plex = FakePlex(share_return=(1234, "test-invite-token"))
     bot = FakeBot()
     cq = FakeCQ(data=f"approve:{rid}")
 
@@ -302,3 +317,65 @@ async def test_approve_used_timestamp_not_zero(repo: Repo, settings: Settings) -
     assert req is not None
     assert req["decided_at"] is not None
     assert before <= int(req["decided_at"]) <= after
+
+
+async def test_approve_dm_no_token_fallback(repo: Repo, settings: Settings) -> None:
+    """share_server returns token=None AND list_shared finds no match → DM uses
+    approved_no_token text and has no Accept button."""
+    rid = await _seed_request(repo)
+    await _seed_server_cache(repo)
+
+    plex = FakePlex(share_return=(1234, None))
+    bot = FakeBot()
+    cq = FakeCQ(data=f"approve:{rid}")
+
+    await handle_approve(cq, repo, bot, settings, plex, None)  # type: ignore[arg-type]
+
+    assert len(bot.sent) == 1
+    dm = bot.sent[0]
+    assert dm["chat_id"] == 42
+    # approved_no_token text contains "app.plex.tv" (en variant)
+    assert "app.plex.tv" in str(dm["text"])
+    # No URL button — only apps:show callback
+    markup = dm["reply_markup"]
+    assert markup is not None
+    buttons = [b for row in markup.inline_keyboard for b in row]
+    urls = [b.url for b in buttons if b.url]
+    assert urls == []
+    callbacks = [b.callback_data for b in buttons if b.callback_data]
+    assert "apps:show" in callbacks
+
+
+async def test_approve_dm_token_via_list_shared_fallback(
+    repo: Repo, settings: Settings
+) -> None:
+    """share_server token=None but list_shared finds it → DM gets URL button."""
+    rid = await _seed_request(repo)
+    await _seed_server_cache(repo)
+
+    plex = FakePlex(share_return=(1234, None))
+    # Override list_shared to return a match for vasya@example.com
+    async def _list_shared(machine_identifier: str) -> list[dict[str, object]]:
+        return [
+            {
+                "id": 99,
+                "email": "vasya@example.com",
+                "plex_user_id": 1234,
+                "invite_token": "fallback-tok",
+            }
+        ]
+    plex.list_shared = _list_shared  # type: ignore[method-assign]
+
+    bot = FakeBot()
+    cq = FakeCQ(data=f"approve:{rid}")
+
+    await handle_approve(cq, repo, bot, settings, plex, None)  # type: ignore[arg-type]
+
+    assert len(bot.sent) == 1
+    dm = bot.sent[0]
+    assert dm["chat_id"] == 42
+    markup = dm["reply_markup"]
+    assert markup is not None
+    buttons = [b for row in markup.inline_keyboard for b in row]
+    urls = [b.url for b in buttons if b.url]
+    assert any("fallback-tok" in u for u in urls)

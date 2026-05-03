@@ -43,10 +43,27 @@ admin:
   remove_not_found: "User not found in DB."
   retry_button: "🔄 Retry"
 notify_user:
-  approved: "✅ Done! An invite was sent to {email}. Accept it from your inbox, then /start will show the new menu."
+  approved: |-
+    ✅ Done!
+
+    1. Tap "Accept invite" below — Plex will ask you to sign in (Google / Apple / email — any).
+    2. After login the server «{server_name}» appears in your library list automatically.
+    3. ⚠️ Plex's setup screen pushes its own libraries (Watchlist, Live TV, Movies & Shows). Those aren't from this server — uncheck them and keep only the ones the admin shared.
+
+    Don't see the link? An email with the same invite is on its way to {email}.
+  approved_no_token: |-
+    ✅ Done!
+
+    An invite email is on its way to {email} — tap the link in that email to accept.
+
+    If you already have a Plex account with this email, you can just open app.plex.tv and log in — the server «{server_name}» will appear in your library list.
+
+    ⚠️ Plex's setup screen pushes its own libraries (Watchlist, Live TV, Movies & Shows). Those aren't from this server — uncheck them and keep only the ones the admin shared.
   rejected: "❌ Your request was rejected.\nReason: {reason}"
   rejected_no_reason: "❌ Your request was rejected."
   revoked: "❌ Your access to Plex has been revoked by the admin."
+  accept_invite_button: "🌐 Accept invite"
+  apps_button: "📱 Get apps"
 menu:
   request_access: "📥 Request access to Plex"
   apps: "📱 Get apps"

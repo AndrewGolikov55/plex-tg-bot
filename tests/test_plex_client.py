@@ -58,8 +58,9 @@ async def test_discover_server_picks_owned(plex_client: PlexClient) -> None:
 @respx.mock
 async def test_share_server_success_user_id(plex_client: PlexClient) -> None:
     respx.post(SHARE_URL).mock(return_value=httpx.Response(200, json={"userId": 1234}))
-    uid = await plex_client.share_server(**_share_kwargs())  # type: ignore[arg-type]
+    uid, token = await plex_client.share_server(**_share_kwargs())  # type: ignore[arg-type]
     assert uid == 1234
+    assert token is None
 
 
 @respx.mock
@@ -67,16 +68,34 @@ async def test_share_server_success_user_id_nested(plex_client: PlexClient) -> N
     respx.post(SHARE_URL).mock(
         return_value=httpx.Response(200, json={"user": {"id": 5678}})
     )
-    uid = await plex_client.share_server(**_share_kwargs())  # type: ignore[arg-type]
+    uid, token = await plex_client.share_server(**_share_kwargs())  # type: ignore[arg-type]
     assert uid == 5678
+    assert token is None
+
+
+@respx.mock
+async def test_share_server_returns_invite_token_when_present(
+    plex_client: PlexClient,
+) -> None:
+    respx.post(SHARE_URL).mock(
+        return_value=httpx.Response(
+            200, json={"userId": 1234, "inviteToken": "abc123"}
+        )
+    )
+    uid, token = await plex_client.share_server(**_share_kwargs())  # type: ignore[arg-type]
+    assert uid == 1234
+    assert token == "abc123"
 
 
 @respx.mock
 async def test_share_server_422_with_user_id(plex_client: PlexClient) -> None:
-    respx.post(SHARE_URL).mock(return_value=httpx.Response(422, json={"userId": 7}))
+    respx.post(SHARE_URL).mock(
+        return_value=httpx.Response(422, json={"userId": 7, "inviteToken": "tok7"})
+    )
     with pytest.raises(PlexAlreadyShared) as exc_info:
         await plex_client.share_server(**_share_kwargs())  # type: ignore[arg-type]
     assert exc_info.value.args[0] == 7
+    assert exc_info.value.args[1] == "tok7"
 
 
 @respx.mock
@@ -85,6 +104,8 @@ async def test_share_server_422_without_user_id(plex_client: PlexClient) -> None
     with pytest.raises(PlexAlreadyShared) as exc_info:
         await plex_client.share_server(**_share_kwargs())  # type: ignore[arg-type]
     assert exc_info.value.args[0] == 0
+    assert len(exc_info.value.args) == 2
+    assert exc_info.value.args[1] is None
 
 
 @respx.mock
@@ -97,6 +118,8 @@ async def test_share_server_422_non_json(plex_client: PlexClient) -> None:
     with pytest.raises(PlexAlreadyShared) as exc_info:
         await plex_client.share_server(**_share_kwargs())  # type: ignore[arg-type]
     assert exc_info.value.args[0] == 0
+    assert len(exc_info.value.args) == 2
+    assert exc_info.value.args[1] is None
 
 
 @respx.mock

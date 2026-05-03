@@ -31,7 +31,9 @@ def test_placeholders_match() -> None:
 
 def test_t_substitutes() -> None:
     set_lang("en")
-    assert "vasya@example.com" in t("notify_user.approved", email="vasya@example.com")
+    assert "vasya@example.com" in t(
+        "notify_user.approved", server_name="MyPlex", email="vasya@example.com"
+    )
 
 
 def test_t_unknown_key_raises() -> None:

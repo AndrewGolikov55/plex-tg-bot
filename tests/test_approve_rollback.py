@@ -40,25 +40,28 @@ class FakeBot:
     ) -> None:
         self.edits.append({"chat_id": chat_id, "message_id": message_id, "text": text})
 
-    async def send_message(self, chat_id: int, text: str) -> None:
-        self.sent.append({"chat_id": chat_id, "text": text})
+    async def send_message(self, chat_id: int, text: str, reply_markup: object = None) -> None:
+        self.sent.append({"chat_id": chat_id, "text": text, "reply_markup": reply_markup})
 
 
 class FakePlex:
     def __init__(
         self,
         share_side_effect: BaseException | None = None,
-        share_return: int = 1234,
+        share_return: tuple[int, str | None] = (1234, "test-invite-token"),
     ) -> None:
         self.share_calls: list[dict[str, object]] = []
         self._side_effect = share_side_effect
         self._return = share_return
 
-    async def share_server(self, **kwargs: object) -> int:
+    async def share_server(self, **kwargs: object) -> tuple[int, str | None]:
         self.share_calls.append(kwargs)
         if self._side_effect is not None:
             raise self._side_effect
         return self._return
+
+    async def list_shared(self, machine_identifier: str) -> list[dict[str, object]]:
+        return []
 
 
 # ---------------------------------------------------------------------------
@@ -189,7 +192,7 @@ async def test_approve_retry_after_rollback_succeeds(
     assert await repo.get_pending_request_for_user(42) is not None
 
     # Second attempt – Plex succeeds
-    plex_ok = FakePlex(share_return=1234)
+    plex_ok = FakePlex(share_return=(1234, "test-invite-token"))
     bot2 = FakeBot()
     cq2 = FakeCQ(data=f"approve:{rid}")
     await handle_approve(cq2, repo, bot2, settings, plex_ok, None)  # type: ignore[arg-type]

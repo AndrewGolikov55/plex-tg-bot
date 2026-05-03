@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 from aiogram import Bot, F, Router, types
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from plex_tg_bot.bot.states import RejectFSM
 from plex_tg_bot.config import Settings
@@ -21,6 +22,38 @@ if TYPE_CHECKING:
     pass
 
 log = logging.getLogger(__name__)
+
+_ACCEPT_URL_TEMPLATE = (
+    "https://app.plex.tv/desktop/#!/sharing-invite?inviteToken={token}"
+)
+
+
+def _build_approved_dm(
+    server_name: str, email: str, invite_token: str | None
+) -> tuple[str, types.InlineKeyboardMarkup]:
+    """Compose the DM sent to the user after approve.
+
+    With invite_token: rich text + [Accept invite] URL button + [Get apps].
+    Without: text-only fallback + [Get apps] only.
+    """
+    kb = InlineKeyboardBuilder()
+    if invite_token:
+        text = t(
+            "notify_user.approved", server_name=server_name, email=email
+        )
+        kb.button(
+            text=t("notify_user.accept_invite_button"),
+            url=_ACCEPT_URL_TEMPLATE.format(token=invite_token),
+        )
+    else:
+        text = t(
+            "notify_user.approved_no_token",
+            server_name=server_name,
+            email=email,
+        )
+    kb.button(text=t("notify_user.apps_button"), callback_data="apps:show")
+    kb.adjust(1)
+    return text, kb.as_markup()
 
 
 async def handle_approve(
@@ -67,8 +100,9 @@ async def handle_approve(
 
     # ── Step 3: Plex share ──────────────────────────────────────────────────
     plex_user_id: int
+    invite_token: str | None = None
     try:
-        plex_user_id = await plex.share_server(
+        plex_user_id, invite_token = await plex.share_server(
             machine_identifier=machine_identifier,
             email=email,
             library_section_ids=settings.shared_library_ids,
@@ -78,12 +112,30 @@ async def handle_approve(
         )
     except PlexAlreadyShared as e:
         plex_user_id = int(e.args[0]) if e.args else 0
+        invite_token = e.args[1] if len(e.args) >= 2 else None
         log.info("approve: %s already shared (plex_user_id=%d)", email, plex_user_id)
     except (PlexAuthError, PlexUnreachable) as e:
         log.warning("approve: Plex error for request %d: %s", rid, e)
         await repo.rollback_claim(rid)
         await cq.answer(t("errors.plex_temporary"), show_alert=True)
         return
+
+    # Fallback: if POST didn't surface the token, look it up via list_shared.
+    if invite_token is None:
+        try:
+            items = await plex.list_shared(machine_identifier)
+            for item in items:
+                if item.get("email") == email:
+                    tok = item.get("invite_token")
+                    if isinstance(tok, str) and tok:
+                        invite_token = tok
+                    break
+        except (PlexAuthError, PlexUnreachable) as e:
+            log.warning(
+                "approve %d: list_shared fallback for invite_token failed: %s",
+                rid,
+                e,
+            )
 
     # ── Step 4: Upsert shared user ──────────────────────────────────────────
     await repo.upsert_shared_user(
@@ -116,11 +168,16 @@ async def handle_approve(
         log.warning("approve: could not edit admin card for request %d: %s", rid, e)
 
     # ── Step 8: DM user ─────────────────────────────────────────────────────
+    server_name = settings.plex_server_name or (
+        cache["friendly_name"] if cache else "Plex"
+    )
+    dm_text, dm_kb = _build_approved_dm(
+        server_name=server_name,
+        email=email,
+        invite_token=invite_token,
+    )
     try:
-        await bot.send_message(
-            telegram_id,
-            t("notify_user.approved", email=email),
-        )
+        await bot.send_message(telegram_id, dm_text, reply_markup=dm_kb)
     except Exception as e:
         log.warning("approve: could not DM user %d: %s", telegram_id, e)
 
