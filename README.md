@@ -50,6 +50,10 @@ Set `PLEX_BOT_DATA_BIND` to the **parent** directory on the host (e.g. `/mnt/use
 
 Portainer will pull the manifest on every release.
 
+#### Auto-redeploy (CD)
+
+The release workflow can hit a Portainer GitOps webhook after a successful image build, so each new tag goes live without a manual click. Set the repo secret `PORTAINER_WEBHOOK` to your stack's full webhook URL (host + UUID); it's masked from logs. If unset the redeploy step is skipped.
+
 ### Local development
 
 Use `docker-compose.dev.yml` to build and run the bot from your local source:

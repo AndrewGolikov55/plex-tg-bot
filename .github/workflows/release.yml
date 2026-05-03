@@ -33,3 +33,23 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  redeploy:
+    needs: build-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Portainer redeploy
+        env:
+          WEBHOOK: ${{ secrets.PORTAINER_WEBHOOK }}
+        run: |
+          if [ -z "$WEBHOOK" ]; then
+            echo "::warning::PORTAINER_WEBHOOK secret not set, skipping CD trigger"
+            exit 0
+          fi
+          # the URL itself is a secret (host + UUID); --silent suppresses progress
+          # and we redirect both stdout/stderr to avoid leaking it on errors
+          curl --fail --silent --show-error -X POST "$WEBHOOK" -o /dev/null 2>err.log || {
+            echo "::error::webhook POST failed (response hidden to avoid leaking URL)"
+            exit 1
+          }
+          echo "Portainer redeploy triggered"
