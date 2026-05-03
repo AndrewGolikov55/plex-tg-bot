@@ -4,6 +4,16 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-05-03
+
+### Added
+- Bot description and short description — visible on the empty chat above the Start button. Localized for en/ru.
+- Slash-commands menu (the `/` button next to the input field). Default scope: `/start`, `/request`, `/help`. Admin chat scope additionally includes `/admin`. Localized command descriptions.
+- New `bot/profile.py` module + `setup_bot_profile()` called once at startup. Failures are logged, not fatal.
+
+### Internal
+- New i18n keys: `bot_meta.description`, `bot_meta.short_description`, `commands.{start,request,help,admin}`.
+
 ## [0.2.0] - 2026-05-03
 
 ### Added

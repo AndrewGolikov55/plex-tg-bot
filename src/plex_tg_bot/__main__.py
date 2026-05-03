@@ -18,6 +18,7 @@ from plex_tg_bot.bot.apps import make_apps_router
 from plex_tg_bot.bot.factory import make_bot_and_dispatcher
 from plex_tg_bot.bot.help import make_help_router
 from plex_tg_bot.bot.overseerr import make_overseerr_router
+from plex_tg_bot.bot.profile import setup_bot_profile
 from plex_tg_bot.bot.request import make_request_router
 from plex_tg_bot.bot.start import make_start_router
 from plex_tg_bot.bot.watch import make_watch_router
@@ -60,6 +61,8 @@ async def _run() -> None:
     http = make_async_client(settings.proxy_url, settings.no_proxy)
 
     bot, dp = make_bot_and_dispatcher(settings)
+
+    await setup_bot_profile(bot, settings)
 
     plex = PlexClient(settings.plex_token, f"plex-tg-bot/{__version__}", http)
     overseerr: OverseerrClient | None = (
