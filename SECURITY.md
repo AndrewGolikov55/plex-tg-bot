@@ -18,10 +18,10 @@ This project handles two sensitive credentials:
 Vulnerabilities of interest include:
 
 - Token leakage via logs, errors, or HTTP responses
-- Path traversal or arbitrary file read via `APPS_MARKDOWN_PATH`
 - SQL injection in `db/repo.py`
-- Authorization bypass in `/admin` (e.g. someone outside `ADMIN_CHAT_ID` triggering admin commands)
+- Authorization bypass in `/admin` (e.g. someone outside `ADMIN_CHAT_ID` triggering admin commands or callbacks)
 - DoS via unbounded resource consumption
+- HTML injection in user-controlled content rendered with `parse_mode="HTML"` (e.g. via Plex API responses or DB rows surfaced in admin panel)
 
 Out of scope:
 

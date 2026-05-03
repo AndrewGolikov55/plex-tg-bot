@@ -105,7 +105,11 @@ async def _users_dispatch(
 ) -> None:
     # parts: ["admin", "users", "<sub>", ...]
     if len(parts) >= 4 and parts[2] == "page":
-        page = max(1, int(parts[3]))
+        try:
+            page = max(1, int(parts[3]))
+        except ValueError:
+            await cq.answer()
+            return
         await _show_users_page(cq, repo, page)
     elif len(parts) >= 4 and parts[2] == "remove":
         await _show_remove_confirm(cq, parts[3])
@@ -265,7 +269,11 @@ async def _pending_dispatch(
     cq: types.CallbackQuery, repo: Repo, parts: list[str]
 ) -> None:
     if len(parts) >= 4 and parts[2] == "page":
-        page = max(1, int(parts[3]))
+        try:
+            page = max(1, int(parts[3]))
+        except ValueError:
+            await cq.answer()
+            return
         await _show_pending_page(cq, repo, page)
     else:
         await cq.answer()

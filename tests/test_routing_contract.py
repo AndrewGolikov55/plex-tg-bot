@@ -80,6 +80,9 @@ class _StubPlex:
     async def discover_server(self) -> tuple[str, str]:
         return ("MID", "Stub")
 
+    async def revoke_share(self, machine_identifier: str, email: str) -> None:
+        return None
+
 
 async def _stub_run_sync() -> tuple[int, int]:
     return (0, 0)
