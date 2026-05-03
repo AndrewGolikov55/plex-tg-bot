@@ -107,6 +107,12 @@ async def _users_dispatch(
     if len(parts) >= 4 and parts[2] == "page":
         page = max(1, int(parts[3]))
         await _show_users_page(cq, repo, page)
+    elif len(parts) >= 4 and parts[2] == "remove":
+        await _show_remove_confirm(cq, parts[3])
+    elif len(parts) >= 4 and parts[2] == "remove_confirm":
+        await _do_remove(cq, repo, settings, bot, plex, parts[3])
+    elif len(parts) >= 4 and parts[2] == "remove_cancel":
+        await _show_users_page(cq, repo, 1)
     else:
         await cq.answer()
 
@@ -156,6 +162,102 @@ async def _show_users_page(
     final.inline_keyboard.extend(back_kb.as_markup().inline_keyboard)
 
     await cq.message.edit_text("\n".join(lines), reply_markup=final)
+    await cq.answer()
+
+
+async def _show_remove_confirm(cq: types.CallbackQuery, email: str) -> None:
+    if cq.message is None or not hasattr(cq.message, "edit_text"):
+        await cq.answer()
+        return
+    text = t("admin.remove_confirm", email=email)
+    kb = InlineKeyboardBuilder()
+    kb.button(
+        text=t("admin.remove_yes"),
+        callback_data=f"admin:users:remove_confirm:{email}",
+    )
+    kb.button(
+        text=t("admin.remove_cancel"),
+        callback_data=f"admin:users:remove_cancel:{email}",
+    )
+    kb.adjust(2)
+    await cq.message.edit_text(text, reply_markup=kb.as_markup())
+    await cq.answer()
+
+
+def _retry_kb(email: str) -> types.InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(
+        text=t("admin.retry_button"),
+        callback_data=f"admin:users:remove_confirm:{email}",
+    )
+    kb.button(text=t("admin.back_button"), callback_data="admin:users:page:1")
+    kb.adjust(2)
+    return kb.as_markup()
+
+
+async def _do_remove(
+    cq: types.CallbackQuery,
+    repo: Repo,
+    settings: Settings,
+    bot: Bot,
+    plex: _PlexProto,
+    email: str,
+) -> None:
+    """Atomic: Plex revoke first, then DB delete + DM. On Plex error: nothing
+    is mutated, retry card is shown."""
+    if cq.message is None or not hasattr(cq.message, "edit_text"):
+        await cq.answer()
+        return
+
+    # 0. confirm row exists
+    row = await repo.get_shared_user_by_email(email)
+    if row is None:
+        kb = InlineKeyboardBuilder()
+        kb.button(text=t("admin.back_button"), callback_data="admin:menu")
+        await cq.message.edit_text(
+            t("admin.remove_not_found"), reply_markup=kb.as_markup()
+        )
+        await cq.answer()
+        return
+
+    # 1. Plex revoke
+    cache = await repo.get_plex_server_cache()
+    if cache is None:
+        await cq.message.edit_text(
+            t("admin.remove_plex_unreachable"), reply_markup=_retry_kb(email)
+        )
+        await cq.answer()
+        return
+
+    from plex_tg_bot.services.plex import PlexAuthError, PlexUnreachable
+
+    try:
+        await plex.revoke_share(cache["machine_identifier"], email)
+    except (PlexAuthError, PlexUnreachable) as e:
+        log.warning("revoke %s: plex error %s", email, e)
+        await cq.message.edit_text(
+            t("admin.remove_plex_unreachable"), reply_markup=_retry_kb(email)
+        )
+        await cq.answer()
+        return
+
+    # 2. DB delete
+    await repo.delete_shared_user(email)
+
+    # 3. user DM (best effort)
+    if row.get("telegram_id"):
+        try:
+            await bot.send_message(int(row["telegram_id"]), t("notify_user.revoked"))
+        except Exception as e:
+            log.warning("DM revoked-user %s failed: %s", email, e)
+
+    # 4. success card
+    kb = InlineKeyboardBuilder()
+    kb.button(text=t("admin.back_button"), callback_data="admin:users:page:1")
+    await cq.message.edit_text(
+        t("admin.remove_success", email=email),
+        reply_markup=kb.as_markup(),
+    )
     await cq.answer()
 
 

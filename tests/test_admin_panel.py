@@ -243,3 +243,128 @@ async def test_admin_callback_from_non_admin_chat_blocks(
     assert cq.message.edit_calls == []
     assert cq.answer_calls[-1]["show_alert"] is True
     assert cq.answer_calls[-1]["text"] == t("admin.not_authorized")
+
+
+# ---- remove flow ----
+
+
+async def test_remove_click_shows_confirmation(repo: Repo, settings: Settings) -> None:
+    now = int(time.time())
+    await repo.upsert_user(42, "v", "V", "en")
+    await repo.upsert_shared_user("v@e.com", 42, 1, now, now)
+    cq = FakeCQ(-100, "admin:users:remove:v@e.com")
+    await handle_admin_callback(cq, repo, settings, FakeBot(), FakePlex(), _stub_run_sync)  # type: ignore[arg-type]
+    last = cq.message.edit_calls[-1]
+    assert "v@e.com" in last["text"]
+    cbs = [
+        b.callback_data
+        for row in last["reply_markup"].inline_keyboard
+        for b in row
+        if b.callback_data
+    ]
+    assert "admin:users:remove_confirm:v@e.com" in cbs
+    assert "admin:users:remove_cancel:v@e.com" in cbs
+
+
+async def test_remove_confirm_happy_path(repo: Repo, settings: Settings) -> None:
+    now = int(time.time())
+    await repo.upsert_user(42, "v", "V", "en")
+    await repo.upsert_shared_user("v@e.com", 42, 1, now, now)
+    await repo.upsert_plex_server_cache("MID", "X")
+    bot = FakeBot()
+    plex = FakePlex()  # revoke_share AsyncMock returns None (success)
+    cq = FakeCQ(-100, "admin:users:remove_confirm:v@e.com")
+    await handle_admin_callback(cq, repo, settings, bot, plex, _stub_run_sync)  # type: ignore[arg-type]
+
+    # plex.revoke_share called with the right args
+    plex.revoke_share.assert_awaited_once_with("MID", "v@e.com")
+    # DB row deleted
+    assert await repo.get_shared_user_by_email("v@e.com") is None
+    # user DM sent
+    assert any(s["chat_id"] == 42 for s in bot.sent)
+    assert any(t("notify_user.revoked") == s["text"] for s in bot.sent)
+    # success message shown
+    last = cq.message.edit_calls[-1]
+    assert "v@e.com" in last["text"]
+    assert "removed" in last["text"].lower() or "удал" in last["text"].lower()
+
+
+async def test_remove_confirm_plex_unreachable_does_not_delete(
+    repo: Repo, settings: Settings
+) -> None:
+    from plex_tg_bot.services.plex import PlexUnreachable
+
+    now = int(time.time())
+    await repo.upsert_user(42, "v", "V", "en")
+    await repo.upsert_shared_user("v@e.com", 42, 1, now, now)
+    await repo.upsert_plex_server_cache("MID", "X")
+    plex = FakePlex()
+    plex.revoke_share.side_effect = PlexUnreachable("boom")
+    bot = FakeBot()
+    cq = FakeCQ(-100, "admin:users:remove_confirm:v@e.com")
+    await handle_admin_callback(cq, repo, settings, bot, plex, _stub_run_sync)  # type: ignore[arg-type]
+
+    # DB row NOT deleted
+    assert (await repo.get_shared_user_by_email("v@e.com")) is not None
+    # no user DM
+    assert bot.sent == []
+    # error card shown
+    last = cq.message.edit_calls[-1]
+    assert (
+        t("admin.remove_plex_unreachable") in last["text"]
+        or "unreachable" in last["text"].lower()
+        or "недост" in last["text"].lower()
+    )
+    # retry button present
+    cbs = [
+        b.callback_data
+        for row in last["reply_markup"].inline_keyboard
+        for b in row
+        if b.callback_data
+    ]
+    assert "admin:users:remove_confirm:v@e.com" in cbs
+
+
+async def test_remove_confirm_user_not_in_db(
+    repo: Repo, settings: Settings
+) -> None:
+    await repo.upsert_plex_server_cache("MID", "X")
+    cq = FakeCQ(-100, "admin:users:remove_confirm:ghost@e.com")
+    await handle_admin_callback(cq, repo, settings, FakeBot(), FakePlex(), _stub_run_sync)  # type: ignore[arg-type]
+    last = cq.message.edit_calls[-1]
+    assert t("admin.remove_not_found") == last["text"]
+
+
+async def test_remove_cancel_returns_to_users_page(
+    repo: Repo, settings: Settings
+) -> None:
+    now = int(time.time())
+    await repo.upsert_user(42, "v", "V", "en")
+    await repo.upsert_shared_user("v@e.com", 42, 1, now, now)
+    cq = FakeCQ(-100, "admin:users:remove_cancel:v@e.com")
+    await handle_admin_callback(cq, repo, settings, FakeBot(), FakePlex(), _stub_run_sync)  # type: ignore[arg-type]
+    last = cq.message.edit_calls[-1]
+    # back to users page 1
+    assert "v@e.com" in last["text"]
+    assert "page 1/1" in last["text"]
+
+
+async def test_remove_dm_user_failure_does_not_rollback(
+    repo: Repo, settings: Settings
+) -> None:
+    """If DM to the user fails (e.g. user blocked the bot), the revoke is still committed."""
+    now = int(time.time())
+    await repo.upsert_user(42, "v", "V", "en")
+    await repo.upsert_shared_user("v@e.com", 42, 1, now, now)
+    await repo.upsert_plex_server_cache("MID", "X")
+    bot = FakeBot()
+    bot.send_message = AsyncMock(side_effect=Exception("user blocked"))  # type: ignore[method-assign]
+    plex = FakePlex()
+    cq = FakeCQ(-100, "admin:users:remove_confirm:v@e.com")
+    await handle_admin_callback(cq, repo, settings, bot, plex, _stub_run_sync)  # type: ignore[arg-type]
+
+    # DB row deleted (revoke succeeded)
+    assert await repo.get_shared_user_by_email("v@e.com") is None
+    # success card
+    last = cq.message.edit_calls[-1]
+    assert "v@e.com" in last["text"]
