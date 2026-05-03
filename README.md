@@ -46,6 +46,8 @@ Create a stack pointing to this repo:
 - Compose path: `docker-compose.yml`
 - Environment variables: paste from your `.env` (or set individually)
 
+Set `PLEX_BOT_DATA_BIND` to the **parent** directory on the host (e.g. `/mnt/user/VmBOX/docker/plex-bot`) — the manifest appends `/data` itself. Make sure that directory is owned by UID 1000 (the in-container `bot` user).
+
 Portainer will pull the manifest on every release.
 
 ### Local development

@@ -28,6 +28,6 @@ services:
       - ALLOW_CHANNELS=${ALLOW_CHANNELS:-0}
     volumes:
       - ./src:/app/src:ro
-      - ./data:/data
+      - ${PLEX_BOT_DATA_BIND:-.}/data:/data
     ports:
       - "${HEALTH_PORT:-9095}:${HEALTH_PORT:-9095}"
