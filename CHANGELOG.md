@@ -4,6 +4,16 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-05-03
+
+### Fixed
+- `[🗑 Remove]` in the admin panel always failed with "Plex unreachable" because Plex returns HTTP 405 on `DELETE /api/v2/shared_servers/{id}`. Switched to `DELETE /api/v2/friends/{plex_user_id}` (the same endpoint python-plexapi uses for `removeFriend`). Sourced `plex_user_id` directly from the local DB row, which removes a redundant `list_shared` round-trip.
+- Plex 401 (invalid token) during revoke now surfaces a distinct user-facing message ("Plex token rejected (401). Check PLEX_TOKEN.") instead of the generic "Plex unreachable".
+
+### Internal
+- `PlexClient.revoke_share()` signature changed: `(plex_user_id: int)` instead of `(machine_identifier, email)`. Pre-flight `list_shared` lookup gone. Tests rewritten to mock the new endpoint.
+- New i18n key `admin.remove_plex_auth_error` (en/ru).
+
 ## [0.3.0] - 2026-05-03
 
 ### Added

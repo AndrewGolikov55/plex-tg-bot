@@ -80,7 +80,7 @@ class _StubPlex:
     async def discover_server(self) -> tuple[str, str]:
         return ("MID", "Stub")
 
-    async def revoke_share(self, machine_identifier: str, email: str) -> None:
+    async def revoke_share(self, plex_user_id: int) -> None:
         return None
 
 

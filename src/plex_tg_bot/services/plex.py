@@ -94,18 +94,27 @@ class PlexClient:
                 out.append({"id": sid, "email": email, "plex_user_id": uid})
         return out
 
-    async def revoke_share(self, machine_identifier: str, email: str) -> None:
-        """Look up the shared_server for `email` and DELETE it.
-        No-op if the user isn't currently shared. Raises PlexAuthError on 401
-        or PlexUnreachable on transport / 5xx errors."""
-        items = await self.list_shared(machine_identifier)
-        target = next((it for it in items if it.get("email") == email), None)
-        if target is None:
+    async def revoke_share(self, plex_user_id: int) -> None:
+        """Revoke access for a Plex user via the friends endpoint.
+
+        Uses `DELETE /api/v2/friends/{plex_user_id}` — the same endpoint
+        python-plexapi's `MyPlexAccount.removeFriend()` calls. It removes
+        the friend relationship, which includes server share. Returns
+        silently on 404 (already gone). 200 / 204 are both treated as
+        success. Raises PlexAuthError on 401 or PlexUnreachable on
+        network / 4xx-other / 5xx.
+
+        Note: we deliberately switched away from
+        `DELETE /api/v2/shared_servers/{id}` because Plex returns
+        HTTP 405 (Method Not Allowed) on that path — the v2 API does
+        not support DELETE on shared_servers."""
+        if plex_user_id <= 0:
+            # No usable Plex id (e.g. invite still pending). Nothing to revoke
+            # server-side; caller will still purge the local DB row.
             return
-        sid = int(target["id"])
         try:
             r = await self._http.delete(
-                f"{self.BASE}/shared_servers/{sid}",
+                f"{self.BASE}/friends/{plex_user_id}",
                 headers=self._headers(),
             )
         except httpx.HTTPError as e:

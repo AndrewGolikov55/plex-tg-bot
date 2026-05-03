@@ -39,6 +39,7 @@ admin:
   remove_cancel: "❌ Отмена"
   remove_success: "✅ {email} удалён."
   remove_plex_unreachable: "❌ Plex недоступен, попробуй позже. Пользователь НЕ удалён."
+  remove_plex_auth_error: "❌ Plex токен отклонён (401). Проверь PLEX_TOKEN. Пользователь НЕ удалён."
   remove_not_found: "Пользователь не найден в БД."
   retry_button: "🔄 Повторить"
 notify_user:

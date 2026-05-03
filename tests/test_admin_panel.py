@@ -276,8 +276,8 @@ async def test_remove_confirm_happy_path(repo: Repo, settings: Settings) -> None
     cq = FakeCQ(-100, "admin:users:remove_confirm:v@e.com")
     await handle_admin_callback(cq, repo, settings, bot, plex, _stub_run_sync)  # type: ignore[arg-type]
 
-    # plex.revoke_share called with the right args
-    plex.revoke_share.assert_awaited_once_with("MID", "v@e.com")
+    # plex.revoke_share called with the stored plex_user_id (1)
+    plex.revoke_share.assert_awaited_once_with(1)
     # DB row deleted
     assert await repo.get_shared_user_by_email("v@e.com") is None
     # user DM sent
@@ -323,6 +323,28 @@ async def test_remove_confirm_plex_unreachable_does_not_delete(
         if b.callback_data
     ]
     assert "admin:users:remove_confirm:v@e.com" in cbs
+
+
+async def test_remove_confirm_plex_auth_error_shows_distinct_message(
+    repo: Repo, settings: Settings
+) -> None:
+    """401 from Plex must surface a token-specific message, not the generic 'unreachable'."""
+    from plex_tg_bot.services.plex import PlexAuthError
+
+    now = int(time.time())
+    await repo.upsert_user(42, "v", "V", "en")
+    await repo.upsert_shared_user("v@e.com", 42, 1, now, now)
+    plex = FakePlex()
+    plex.revoke_share.side_effect = PlexAuthError()
+    bot = FakeBot()
+    cq = FakeCQ(-100, "admin:users:remove_confirm:v@e.com")
+    await handle_admin_callback(cq, repo, settings, bot, plex, _stub_run_sync)  # type: ignore[arg-type]
+
+    # DB row preserved
+    assert (await repo.get_shared_user_by_email("v@e.com")) is not None
+    last = cq.message.edit_calls[-1]
+    assert last["text"] == t("admin.remove_plex_auth_error")
+    assert "401" in last["text"] or "PLEX_TOKEN" in last["text"]
 
 
 async def test_remove_confirm_user_not_in_db(

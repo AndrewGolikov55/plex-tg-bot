@@ -26,7 +26,7 @@ PENDING_PAGE_SIZE = 10
 
 
 class _PlexProto(Protocol):
-    async def revoke_share(self, machine_identifier: str, email: str) -> None: ...
+    async def revoke_share(self, plex_user_id: int) -> None: ...
 
 
 def _is_admin_chat(chat_id: int, settings: Settings) -> bool:
@@ -224,20 +224,20 @@ async def _do_remove(
         await cq.answer()
         return
 
-    # 1. Plex revoke
-    cache = await repo.get_plex_server_cache()
-    if cache is None:
+    # 1. Plex revoke — friends endpoint, identified by stored plex_user_id.
+    from plex_tg_bot.services.plex import PlexAuthError, PlexUnreachable
+
+    plex_user_id = int(row.get("plex_user_id") or 0)
+    try:
+        await plex.revoke_share(plex_user_id)
+    except PlexAuthError as e:
+        log.error("revoke %s: PLEX_TOKEN rejected (401): %s", email, e)
         await cq.message.edit_text(
-            t("admin.remove_plex_unreachable"), reply_markup=_retry_kb(email)
+            t("admin.remove_plex_auth_error"), reply_markup=_retry_kb(email)
         )
         await cq.answer()
         return
-
-    from plex_tg_bot.services.plex import PlexAuthError, PlexUnreachable
-
-    try:
-        await plex.revoke_share(cache["machine_identifier"], email)
-    except (PlexAuthError, PlexUnreachable) as e:
+    except PlexUnreachable as e:
         log.warning("revoke %s: plex error %s", email, e)
         await cq.message.edit_text(
             t("admin.remove_plex_unreachable"), reply_markup=_retry_kb(email)
