@@ -95,6 +95,15 @@ All configuration is via environment variables. See `.env.example` for the full 
 
 ## Customization
 
+### Admin chat: group or DM
+
+`ADMIN_CHAT_ID` accepts both forms:
+
+- **Group**: a chat id starting with `-100…` (Telegram supergroup). The bot must be a member of the group; any participant in that group is treated as admin and can approve/reject requests, manage users, and trigger sync. Useful for shared admin teams.
+- **DM**: your personal Telegram user id (positive number). Approve cards and the `/admin` panel land in your private chat with the bot, only you can act on them. Useful for solo operators.
+
+To find either id, add [@userinfobot](https://t.me/userinfobot) to the chat (or message it directly for your own id) and send any message — it replies with the chat id.
+
 ### Apps screen
 
 The "Get apps" message is loaded at runtime from `src/plex_tg_bot/i18n/apps/<lang>.html` (Telegram-flavoured HTML, baked into the image). To customize: edit the file in your fork or open a PR. To add a new language: drop a new `<lang>.html` next to the existing files; the locale parity test will pick it up.
