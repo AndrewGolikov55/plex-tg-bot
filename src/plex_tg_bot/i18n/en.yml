@@ -52,7 +52,6 @@ menu:
   apps: "📱 Get apps"
   watch: "🌐 Watch in browser"
   overseerr: "🎬 Request content"
-  help: "ℹ️ Help"
 help:
   text: "Commands: /start, /request, /apps, /watch, /overseerr, /help"
 bot_meta:
@@ -61,8 +60,6 @@ bot_meta:
     Self-hostable Telegram bot for managing Plex server access.
 
     Send /request — type your email, mention who sent you, and the admin gets an inline-button approval card. After approve you receive a Plex invite, plus shortcuts to apps, web player, and Overseerr.
-
-    Open source: https://github.com/AndrewGolikov55/plex-tg-bot
 commands:
   start: "Open the main menu"
   request: "Request access to the Plex server"

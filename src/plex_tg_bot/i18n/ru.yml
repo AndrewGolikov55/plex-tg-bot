@@ -52,7 +52,6 @@ menu:
   apps: "📱 Скачать приложения"
   watch: "🌐 Смотреть в браузере"
   overseerr: "🎬 Запросить контент"
-  help: "ℹ️ Помощь"
 help:
   text: "Команды: /start, /request, /apps, /watch, /overseerr, /help"
 bot_meta:
@@ -61,8 +60,6 @@ bot_meta:
     Self-hosted Telegram-бот для управления доступом к Plex.
 
     Отправь /request — введи email, напиши откуда узнал о боте, и админу прилетит карточка с inline-кнопками. После одобрения тебе придёт инвайт от Plex, плюс кнопки на приложения, веб-плеер и Overseerr.
-
-    Open source: https://github.com/AndrewGolikov55/plex-tg-bot
 commands:
   start: "Открыть главное меню"
   request: "Запросить доступ к Plex"

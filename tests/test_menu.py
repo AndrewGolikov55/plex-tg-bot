@@ -20,36 +20,30 @@ def _buttons(markup: InlineKeyboardMarkup) -> list[object]:
 def test_no_access_menu() -> None:
     markup = build_main_menu("no_access")
     buttons = _buttons(markup)
-    assert len(buttons) == 2
+    assert len(buttons) == 1
 
     cb_datas = [b.callback_data for b in buttons]
     assert "request:start" in cb_datas
-    assert "help:show" in cb_datas
 
     request_btn = next(b for b in buttons if b.callback_data == "request:start")
     assert request_btn.text == t("menu.request_access")
 
-    help_btn = next(b for b in buttons if b.callback_data == "help:show")
-    assert help_btn.text == t("menu.help")
-
 
 def test_pending_menu() -> None:
+    """Pending state has no actionable buttons — `/start` text already says
+    the request is awaiting admin approval."""
     markup = build_main_menu("pending")
     buttons = _buttons(markup)
-    assert len(buttons) == 1
-
-    assert buttons[0].callback_data == "help:show"
-    assert buttons[0].text == t("menu.help")
+    assert len(buttons) == 0
 
 
 def test_has_access_menu_no_overseerr() -> None:
     markup = build_main_menu("has_access", overseerr_enabled=False)
     buttons = _buttons(markup)
-    assert len(buttons) == 3
+    assert len(buttons) == 2
 
     cb_datas = [b.callback_data for b in buttons]
     assert "apps:show" in cb_datas
-    assert "help:show" in cb_datas
 
     urls = [b.url for b in buttons]
     assert any(url and "plex.tv" in url for url in urls)
@@ -66,11 +60,10 @@ def test_has_access_menu_with_overseerr() -> None:
         overseerr_url=overseerr_url,
     )
     buttons = _buttons(markup)
-    assert len(buttons) == 4
+    assert len(buttons) == 3
 
     cb_datas = [b.callback_data for b in buttons]
     assert "apps:show" in cb_datas
-    assert "help:show" in cb_datas
 
     urls = [b.url for b in buttons]
     assert overseerr_url in urls
@@ -82,9 +75,8 @@ def test_has_access_menu_with_overseerr() -> None:
 def test_has_access_menu_overseerr_enabled_but_no_url() -> None:
     markup = build_main_menu("has_access", overseerr_enabled=True, overseerr_url=None)
     buttons = _buttons(markup)
-    # overseerr_url is None so no overseerr button, only apps + watch + help
-    assert len(buttons) == 3
+    # overseerr_url is None so no overseerr button, only apps + watch
+    assert len(buttons) == 2
 
     cb_datas = [b.callback_data for b in buttons]
     assert "apps:show" in cb_datas
-    assert "help:show" in cb_datas

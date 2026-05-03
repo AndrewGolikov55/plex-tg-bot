@@ -24,6 +24,5 @@ def build_main_menu(
         b.button(text=t("menu.watch"), url=watch_url)
         if overseerr_enabled and overseerr_url:
             b.button(text=t("menu.overseerr"), url=overseerr_url)
-    b.button(text=t("menu.help"), callback_data="help:show")
     b.adjust(1)
     return b.as_markup()
