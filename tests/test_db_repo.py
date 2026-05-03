@@ -116,3 +116,59 @@ async def test_plex_server_cache(repo: Repo) -> None:
     c = await repo.get_plex_server_cache()
     assert c is not None
     assert c["machine_identifier"] == "MID"
+
+
+async def test_list_shared_users_paginated_orders_by_shared_at_desc(repo: Repo) -> None:
+    import time
+    base = int(time.time())
+    await repo.upsert_user(1, "a", "A", "en")
+    await repo.upsert_user(2, "b", "B", "en")
+    await repo.upsert_user(3, "c", "C", "en")
+    await repo.upsert_shared_user("a@e.com", 1, 100, base - 200, base - 200)
+    await repo.upsert_shared_user("b@e.com", 2, 101, base - 100, base - 100)
+    await repo.upsert_shared_user("c@e.com", 3, 102, base, base)
+    page = await repo.list_shared_users_paginated(offset=0, limit=10)
+    emails = [r["email"] for r in page]
+    assert emails == ["c@e.com", "b@e.com", "a@e.com"]
+    # joined fields
+    assert page[0]["username"] == "c"
+
+
+async def test_list_shared_users_paginated_pagination(repo: Repo) -> None:
+    import time
+    now = int(time.time())
+    for i in range(15):
+        await repo.upsert_user(i + 100, f"u{i}", f"U{i}", "en")
+        await repo.upsert_shared_user(
+            f"u{i}@e.com", i + 100, i + 1000, now - i, now - i
+        )
+    p1 = await repo.list_shared_users_paginated(offset=0, limit=10)
+    p2 = await repo.list_shared_users_paginated(offset=10, limit=10)
+    assert len(p1) == 10
+    assert len(p2) == 5
+    # no overlap
+    assert {r["email"] for r in p1}.isdisjoint({r["email"] for r in p2})
+
+
+async def test_count_shared_users(repo: Repo) -> None:
+    import time
+    now = int(time.time())
+    assert await repo.count_shared_users() == 0
+    await repo.upsert_shared_user("a@e.com", None, 1, now, now)
+    await repo.upsert_shared_user("b@e.com", None, 2, now, now)
+    assert await repo.count_shared_users() == 2
+
+
+async def test_delete_shared_user(repo: Repo) -> None:
+    import time
+    now = int(time.time())
+    await repo.upsert_user(42, "v", "V", "en")
+    await repo.upsert_shared_user("v@e.com", 42, 1, now, now)
+    await repo.delete_shared_user("v@e.com")
+    assert await repo.get_shared_user_by_email("v@e.com") is None
+    assert (await repo.has_active_access(42)) is False
+
+
+async def test_delete_shared_user_missing_is_noop(repo: Repo) -> None:
+    # Should not raise even if email doesn't exist
+    await repo.delete_shared_user("ghost@e.com")

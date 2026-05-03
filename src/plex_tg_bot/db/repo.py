@@ -187,6 +187,33 @@ class Repo:
             row = await cur.fetchone()
             return int(row["c"]) if row else 0
 
+    async def count_shared_users(self) -> int:
+        async with self.db.execute(
+            "SELECT COUNT(*) AS c FROM shared_users"
+        ) as cur:
+            row = await cur.fetchone()
+            return int(row["c"]) if row else 0
+
+    async def list_shared_users_paginated(
+        self, offset: int, limit: int
+    ) -> list[dict[str, Any]]:
+        async with self.db.execute(
+            """SELECT su.email, su.status, su.shared_at, su.last_seen_in_plex,
+                      su.telegram_id, u.username, u.display_name
+               FROM shared_users su
+               LEFT JOIN users u ON u.telegram_id = su.telegram_id
+               ORDER BY su.shared_at DESC
+               LIMIT ? OFFSET ?""",
+            (limit, offset),
+        ) as cur:
+            return [dict(r) for r in await cur.fetchall()]
+
+    async def delete_shared_user(self, email: str) -> None:
+        await self.db.execute(
+            "DELETE FROM shared_users WHERE email=?", (email,)
+        )
+        await self.db.commit()
+
     async def count_pending_requests(self) -> int:
         async with self.db.execute(
             "SELECT COUNT(*) AS c FROM requests WHERE status='pending'"
