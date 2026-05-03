@@ -111,7 +111,7 @@ async def _run() -> None:
 
     dp.update.middleware(_TelegramTickMiddleware(obs))
 
-    dp.include_router(make_admin_router(repo, settings, _sync_now))
+    dp.include_router(make_admin_router(repo, settings, bot, plex, _sync_now))
     dp.include_router(make_start_router(repo, settings))
     dp.include_router(make_request_router(repo, bot, settings))
     dp.include_router(make_approve_router(repo, bot, settings, plex, overseerr))

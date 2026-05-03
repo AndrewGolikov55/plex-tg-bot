@@ -91,7 +91,7 @@ def routers(repo: Repo, settings: Settings) -> list[Router]:
     bot = _StubBot()
     plex = _StubPlex()
     return [
-        make_admin_router(repo, settings, _stub_run_sync),
+        make_admin_router(repo, settings, bot, plex, _stub_run_sync),  # type: ignore[arg-type]
         make_start_router(repo, settings),
         make_request_router(repo, bot, settings),  # type: ignore[arg-type]
         make_approve_router(repo, bot, settings, plex, None),  # type: ignore[arg-type]
