@@ -4,6 +4,18 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.5] - 2026-05-04
+
+### Fixed
+- Daily sync was silently doing nothing in production. Plex deprecated `GET /api/v2/shared_servers` (now returns HTTP 405), so `list_shared` always treated the response as a transient failure and exited with `(0, 0)`. Switched to `GET /api/v2/friends?includeSharedServers=1`, walking each friend's `sharedServers` array and filtering by our machine_identifier. The 6 list_shared respx tests rewritten with the new endpoint and payload shape.
+- `list_shared` now skips entries with `deletedAt` or `leftAt` set (revoked or voluntarily-left shares). Previously these were surfaced as still-active.
+
+### Added
+- `list_shared` returns a new `invite_token` field per row (Plex's per-share token used to construct the accept URL `https://app.plex.tv/desktop/#!/sharing-invite?inviteToken=<...>`). v0.4.0 will surface this in the post-approve DM so users get a one-click accept link in the bot. The field is `None` for shares Plex didn't expose a token for (e.g. legacy invites).
+
+### Internal
+- Bumped per-request timeout for `list_shared` to 60s — `includeSharedServers=1` makes the response heavy and the default 30s timed out for accounts with many friends.
+
 ## [0.3.4] - 2026-05-04
 
 ### Fixed

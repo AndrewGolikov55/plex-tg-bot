@@ -130,70 +130,140 @@ async def test_share_server_other_4xx_raises_unreachable(
         await plex_client.share_server(**_share_kwargs())  # type: ignore[arg-type]
 
 
-# --- list_shared tests ---
+# --- list_shared tests (uses /api/v2/friends?includeSharedServers=1) ---
 
-LIST_SHARED_URL = "https://plex.tv/api/v2/shared_servers"
+FRIENDS_LIST_URL = "https://plex.tv/api/v2/friends"
+
+
+def _friend(
+    email: str,
+    user_id: int,
+    *,
+    shared_id: int = 0,
+    machine_identifier: str = "MID",
+    invite_token: str | None = None,
+    deleted_at: str | None = None,
+    left_at: str | None = None,
+) -> dict[str, object]:
+    """Build a minimal /api/v2/friends record with one sharedServer entry."""
+    return {
+        "id": user_id,
+        "email": email,
+        "status": "accepted",
+        "sharedServers": [
+            {
+                "id": shared_id,
+                "machineIdentifier": machine_identifier,
+                "inviteToken": invite_token,
+                "deletedAt": deleted_at,
+                "leftAt": left_at,
+            }
+        ],
+    }
 
 
 @respx.mock
 async def test_list_shared_happy_path(plex_client: PlexClient) -> None:
-    respx.get(LIST_SHARED_URL).mock(
+    respx.get(FRIENDS_LIST_URL).mock(
         return_value=httpx.Response(
             200,
             json=[
-                {"id": 11, "invitedEmail": "alice@example.com", "userId": 111},
-                {"id": 12, "email": "bob@example.com", "user": {"id": 222}},
+                _friend("alice@example.com", 111, shared_id=11, invite_token="tokA"),
+                _friend("bob@example.com", 222, shared_id=12),
             ],
         )
     )
-    result = await plex_client.list_shared("MACHINEID")
+    result = await plex_client.list_shared("MID")
     assert result == [
-        {"id": 11, "email": "alice@example.com", "plex_user_id": 111},
-        {"id": 12, "email": "bob@example.com", "plex_user_id": 222},
+        {"id": 11, "email": "alice@example.com", "plex_user_id": 111, "invite_token": "tokA"},
+        {"id": 12, "email": "bob@example.com", "plex_user_id": 222, "invite_token": None},
     ]
 
 
 @respx.mock
-async def test_list_shared_skips_items_without_email(plex_client: PlexClient) -> None:
-    respx.get(LIST_SHARED_URL).mock(
+async def test_list_shared_filters_by_machine_identifier(plex_client: PlexClient) -> None:
+    """Friends sharing OTHER servers (not ours) must be excluded."""
+    respx.get(FRIENDS_LIST_URL).mock(
         return_value=httpx.Response(
             200,
             json=[
-                {"invitedEmail": "alice@example.com", "userId": 111},
-                {"userId": 999},
-                {"user": {"id": 888}},
+                _friend("alice@example.com", 111, shared_id=11, machine_identifier="MID"),
+                _friend("bob@example.com", 222, shared_id=22, machine_identifier="OTHER"),
             ],
         )
     )
-    result = await plex_client.list_shared("MACHINEID")
-    assert result == [{"id": 0, "email": "alice@example.com", "plex_user_id": 111}]
+    result = await plex_client.list_shared("MID")
+    assert len(result) == 1
+    assert result[0]["email"] == "alice@example.com"
+
+
+@respx.mock
+async def test_list_shared_skips_deleted_or_left_shares(plex_client: PlexClient) -> None:
+    respx.get(FRIENDS_LIST_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                _friend("alice@example.com", 111, shared_id=11),
+                _friend(
+                    "bob@example.com", 222, shared_id=22, deleted_at="2026-05-04T00:00:00Z"
+                ),
+                _friend(
+                    "carol@example.com", 333, shared_id=33, left_at="2026-05-04T00:00:00Z"
+                ),
+            ],
+        )
+    )
+    result = await plex_client.list_shared("MID")
+    assert [r["email"] for r in result] == ["alice@example.com"]
+
+
+@respx.mock
+async def test_list_shared_skips_friends_without_email(plex_client: PlexClient) -> None:
+    respx.get(FRIENDS_LIST_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                _friend("alice@example.com", 111, shared_id=11),
+                {
+                    "id": 222,
+                    "email": None,
+                    "sharedServers": [
+                        {"id": 22, "machineIdentifier": "MID", "inviteToken": None}
+                    ],
+                },
+            ],
+        )
+    )
+    result = await plex_client.list_shared("MID")
+    assert len(result) == 1
+    assert result[0]["email"] == "alice@example.com"
 
 
 @respx.mock
 async def test_list_shared_401_raises_auth_error(plex_client: PlexClient) -> None:
-    respx.get(LIST_SHARED_URL).mock(return_value=httpx.Response(401))
+    respx.get(FRIENDS_LIST_URL).mock(return_value=httpx.Response(401))
     with pytest.raises(PlexAuthError):
-        await plex_client.list_shared("MACHINEID")
+        await plex_client.list_shared("MID")
 
 
 @respx.mock
 async def test_list_shared_5xx_raises_unreachable(plex_client: PlexClient) -> None:
-    respx.get(LIST_SHARED_URL).mock(return_value=httpx.Response(503))
+    respx.get(FRIENDS_LIST_URL).mock(return_value=httpx.Response(503))
     with pytest.raises(PlexUnreachable):
-        await plex_client.list_shared("MACHINEID")
+        await plex_client.list_shared("MID")
 
 
 @respx.mock
 async def test_list_shared_network_error_raises_unreachable(plex_client: PlexClient) -> None:
-    respx.get(LIST_SHARED_URL).mock(side_effect=httpx.ConnectError("boom"))
+    respx.get(FRIENDS_LIST_URL).mock(side_effect=httpx.ConnectError("boom"))
     with pytest.raises(PlexUnreachable):
-        await plex_client.list_shared("MACHINEID")
+        await plex_client.list_shared("MID")
 
 
 @respx.mock
 async def test_list_shared_empty_returns_empty_list(plex_client: PlexClient) -> None:
-    respx.get(LIST_SHARED_URL).mock(return_value=httpx.Response(200, json=[]))
-    result = await plex_client.list_shared("MACHINEID")
+    respx.get(FRIENDS_LIST_URL).mock(return_value=httpx.Response(200, json=[]))
+    result = await plex_client.list_shared("MID")
     assert result == []
 
 

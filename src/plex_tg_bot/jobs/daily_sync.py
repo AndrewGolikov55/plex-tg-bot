@@ -28,7 +28,7 @@ async def run_daily_sync(repo: Repo, plex: PlexClient) -> tuple[int, int]:
         await repo.upsert_shared_user(
             email=str(item["email"]),
             telegram_id=None,
-            plex_user_id=int(item["plex_user_id"]),
+            plex_user_id=int(item["plex_user_id"] or 0),
             shared_at=now,
             last_seen_in_plex=now,
         )

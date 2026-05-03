@@ -72,12 +72,29 @@ class PlexClient:
         data = r.json()
         return int(data.get("userId") or data.get("user", {}).get("id") or 0)
 
-    async def list_shared(self, machine_identifier: str) -> list[dict[str, str | int]]:
+    async def list_shared(
+        self, machine_identifier: str
+    ) -> list[dict[str, str | int | None]]:
+        """List users who currently have access to our server.
+
+        Plex deprecated `GET /api/v2/shared_servers` (now returns 405). The
+        replacement walks `/api/v2/friends?includeSharedServers=1` and filters
+        each friend's `sharedServers` array by our machine_identifier. Skips
+        entries with `deletedAt` or `leftAt` set (revoked / left voluntarily).
+
+        Returned dicts carry the same `id` / `email` / `plex_user_id` keys as
+        before for caller compatibility, plus a new `invite_token` field
+        (string or None) — the per-share token Plex Web uses to construct the
+        accept URL `https://app.plex.tv/desktop/#!/sharing-invite?inviteToken=<...>`.
+        """
         try:
+            # includeSharedServers=1 makes the response significantly larger,
+            # giving the Plex backend more work — bump the per-request timeout.
             r = await self._http.get(
-                f"{self.BASE}/shared_servers",
+                f"{self.BASE}/friends",
                 headers=self._headers(),
-                params={"machineIdentifier": machine_identifier},
+                params={"includeSharedServers": "1"},
+                timeout=60.0,
             )
         except httpx.HTTPError as e:
             raise PlexUnreachable(str(e)) from e
@@ -85,13 +102,25 @@ class PlexClient:
             raise PlexAuthError()
         if r.status_code >= 400:
             raise PlexUnreachable(f"status {r.status_code}")
-        out: list[dict[str, str | int]] = []
-        for item in r.json():
-            email = item.get("invitedEmail") or item.get("email")
-            uid = int(item.get("userId") or item.get("user", {}).get("id") or 0)
-            sid = int(item.get("id") or 0)
-            if email:
-                out.append({"id": sid, "email": email, "plex_user_id": uid})
+        out: list[dict[str, str | int | None]] = []
+        for friend in r.json():
+            email = friend.get("email") or ""
+            plex_user_id = int(friend.get("id") or 0)
+            if not email:
+                continue
+            for ss in friend.get("sharedServers") or []:
+                if ss.get("machineIdentifier") != machine_identifier:
+                    continue
+                if ss.get("deletedAt") or ss.get("leftAt"):
+                    continue
+                out.append(
+                    {
+                        "id": int(ss.get("id") or 0),
+                        "email": email,
+                        "plex_user_id": plex_user_id,
+                        "invite_token": ss.get("inviteToken"),
+                    }
+                )
         return out
 
     async def revoke_share(self, plex_user_id: int) -> None:
