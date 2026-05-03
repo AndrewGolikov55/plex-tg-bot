@@ -31,7 +31,7 @@ def settings(monkeypatch: pytest.MonkeyPatch) -> Settings:
 
 def test_public_commands_excludes_admin() -> None:
     names = {c.command for c in _public_commands()}
-    assert names == {"start", "request", "help"}
+    assert names == {"start", "request"}
     # Each command has a localized description
     for c in _public_commands():
         assert c.description, f"{c.command} has empty description"
@@ -39,7 +39,7 @@ def test_public_commands_excludes_admin() -> None:
 
 def test_admin_commands_includes_public_plus_admin() -> None:
     names = {c.command for c in _admin_commands()}
-    assert names == {"start", "request", "help", "admin"}
+    assert names == {"start", "request", "admin"}
 
 
 def test_admin_command_description_uses_locale_key() -> None:

@@ -34,7 +34,6 @@ def _public_commands() -> list[BotCommand]:
     return [
         BotCommand(command="start", description=t("commands.start")),
         BotCommand(command="request", description=t("commands.request")),
-        BotCommand(command="help", description=t("commands.help")),
     ]
 
 

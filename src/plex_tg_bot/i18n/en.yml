@@ -63,7 +63,6 @@ bot_meta:
 commands:
   start: "Open the main menu"
   request: "Request access to the Plex server"
-  help: "Show available commands"
   admin: "Admin panel (admins only)"
 errors:
   plex_unreachable: "Plex API is unreachable right now. Please try later."

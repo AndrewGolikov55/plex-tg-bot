@@ -4,6 +4,15 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.3] - 2026-05-03
+
+### Changed
+- Apps screen content expanded with per-platform detail: Apple TV, Samsung Tizen, LG webOS, Android TV / Google TV, Roku, Fire TV. Free alternatives called out explicitly — browser at `app.plex.tv`, Kodi + PlexKodiConnect, plus paid options (Plex Pass, Infuse).
+- `/help` removed from the slash-commands menu (the `/` button next to the input field). The slash handler stays — typing `/help` still works — but it's no longer advertised since `/start` covers discovery.
+
+### Internal
+- Dropped unused `commands.help` i18n key (en/ru).
+
 ## [0.3.2] - 2026-05-03
 
 ### Changed
