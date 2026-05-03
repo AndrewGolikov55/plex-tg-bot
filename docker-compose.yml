@@ -1,0 +1,37 @@
+services:
+  plex-tg-bot:
+    image: ghcr.io/andrewgolikov55/plex-tg-bot:${PLEX_BOT_TAG:-latest}
+    container_name: ${PLEX_BOT_CONTAINER_NAME:-plex-tg-bot}
+    restart: unless-stopped
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - ADMIN_CHAT_ID=${ADMIN_CHAT_ID}
+      - PLEX_TOKEN=${PLEX_TOKEN}
+      - PLEX_SERVER_NAME=${PLEX_SERVER_NAME:-}
+      - PLEX_MACHINE_IDENTIFIER=${PLEX_MACHINE_IDENTIFIER:-}
+      - OVERSEERR_PUBLIC_URL=${OVERSEERR_PUBLIC_URL:-}
+      - OVERSEERR_API_KEY=${OVERSEERR_API_KEY:-}
+      - WATCH_URL=${WATCH_URL:-https://app.plex.tv/desktop/}
+      - APPS_MARKDOWN_PATH=${APPS_MARKDOWN_PATH:-/data/apps.md}
+      - DB_PATH=${DB_PATH:-/data/db.sqlite}
+      - BOT_LANG=${BOT_LANG:-en}
+      - PROXY_URL=${PROXY_URL:-}
+      - NO_PROXY=${NO_PROXY:-localhost,127.0.0.1}
+      - HEALTH_PORT=${HEALTH_PORT:-9095}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - DAILY_SYNC_CRON=${DAILY_SYNC_CRON:-0 4 * * *}
+      - SHARED_LIBRARY_IDS=${SHARED_LIBRARY_IDS:-}
+      - ALLOW_SYNC=${ALLOW_SYNC:-1}
+      - ALLOW_CAMERA_UPLOAD=${ALLOW_CAMERA_UPLOAD:-0}
+      - ALLOW_CHANNELS=${ALLOW_CHANNELS:-0}
+    volumes:
+      - type: bind
+        source: ${PLEX_BOT_DATA_BIND:-./data}
+        target: /data
+    ports:
+      - "${HEALTH_PORT:-9095}:${HEALTH_PORT:-9095}"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:${HEALTH_PORT:-9095}/healthz || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5

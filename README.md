@@ -20,17 +20,50 @@ Self-hostable Telegram bot that lets your friends request access to your Plex se
 
 ## Quick start
 
-1. Create a Telegram bot via [@BotFather](https://t.me/BotFather) and copy the token.
-2. Get your Plex token: <https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/>.
-3. Find your admin chat id: add the bot and [@userinfobot](https://t.me/userinfobot) to a private group, send any message — `userinfobot` replies with the negative chat id.
-4. (Optional) Get an Overseerr API key: Settings → General → API Key.
-5. Copy `examples/docker-compose.example.yml` to your machine and `examples/.env.example` to `.env`. Fill in the env values.
-6. Drop your customized `apps.md` into the `data/` directory that is bind-mounted at `/data`.
-7. `docker compose up -d`. The bot will start polling Telegram.
+Two ways to run:
 
-See `examples/` for full templates.
+### A. Plain `docker compose` (recommended for simple self-hosters)
+
+```bash
+git clone https://github.com/AndrewGolikov55/plex-tg-bot.git
+cd plex-tg-bot
+cp .env.example .env
+# edit .env — at minimum set TELEGRAM_BOT_TOKEN, ADMIN_CHAT_ID, PLEX_TOKEN
+mkdir -p data
+docker compose up -d
+docker compose logs -f
+```
+
+The bot starts on host port `9095` exposing `/healthz` and `/metrics`. State (sqlite + your `apps.md`) lives in `./data`.
+
+To customize the apps screen, drop a `data/apps.md` (start from `examples/apps.example.md`).
+
+### B. Portainer (GitOps)
+
+Create a stack pointing to this repo:
+
+- Repository: `https://github.com/AndrewGolikov55/plex-tg-bot.git`
+- Compose path: `docker-compose.yml`
+- Environment variables: paste from your `.env` (or set individually)
+
+Portainer will pull the manifest on every release.
+
+### Local development
+
+Use `docker-compose.dev.yml` to build and run the bot from your local source:
+
+```bash
+cp .env.example .env
+# fill in
+docker compose -f docker-compose.dev.yml build
+docker compose -f docker-compose.dev.yml up
+```
+
+`./src` is bind-mounted, so edit code and restart the container — no rebuild needed for Python changes.
 
 ## Configuration
+
+All configuration is via environment variables. See `.env.example` for the full list with defaults.
 
 | Variable | Required | Default | Description |
 |---|---|---|---|

@@ -16,3 +16,12 @@ jobs:
       - run: uv run ruff check .
       - run: uv run mypy
       - run: uv run pytest -v
+      - name: docker compose config (production manifest)
+        run: |
+          cp .env.example .env
+          # fill in REQUIRED placeholders for syntactic validation only
+          sed -i 's|REPLACE-WITH-YOUR-BOT-TOKEN|fake|; s|REPLACE-WITH-YOUR-PLEX-TOKEN|fake|' .env
+          docker compose -f docker-compose.yml --env-file .env config -q
+      - name: docker compose config (dev manifest)
+        run: |
+          docker compose -f docker-compose.dev.yml --env-file .env config -q
