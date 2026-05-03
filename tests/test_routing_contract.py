@@ -184,9 +184,19 @@ async def test_every_menu_callback_has_handler(routers: list[Router]) -> None:
 
 
 async def test_known_dynamic_callback_prefixes_have_handlers(routers: list[Router]) -> None:
-    """Dynamic callbacks (approve:N, reject:N) are not produced by build_main_menu
-    but ARE generated at runtime by /request. Verify their handlers exist too."""
-    for cb in ("approve:123", "reject:123"):
+    """Dynamic callbacks (approve:N, reject:N, admin:*) are not produced by
+    build_main_menu but ARE generated at runtime. Verify their handlers exist."""
+    for cb in (
+        "approve:123",
+        "reject:123",
+        "admin:menu",
+        "admin:users:page:1",
+        "admin:users:remove:any@e.com",
+        "admin:users:remove_confirm:any@e.com",
+        "admin:users:remove_cancel:any@e.com",
+        "admin:pending:page:1",
+        "admin:sync",
+    ):
         assert await _resolves_callback(routers, cb), f"no handler for {cb}"
 
 
