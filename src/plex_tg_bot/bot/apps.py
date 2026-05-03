@@ -1,6 +1,10 @@
-from __future__ import annotations
+"""Apps handler — sends Telegram-HTML rendered i18n/apps/<lang>.html.
 
-from pathlib import Path
+Triggered by:
+- /apps slash command
+- callback_data='apps:show' (from build_main_menu has_access state)
+"""
+from __future__ import annotations
 
 from aiogram import F, Router, types
 from aiogram.filters import Command
@@ -8,7 +12,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from plex_tg_bot.config import Settings
 from plex_tg_bot.db import Repo
-from plex_tg_bot.i18n import t
+from plex_tg_bot.i18n import load_apps, t
 
 
 def _apps_keyboard() -> types.InlineKeyboardMarkup:
@@ -24,16 +28,7 @@ def _apps_keyboard() -> types.InlineKeyboardMarkup:
 
 
 def _build_apps_payload(settings: Settings) -> tuple[str, types.InlineKeyboardMarkup]:
-    md_path = Path(settings.apps_markdown_path)
-    text = ""
-    if md_path.exists():
-        try:
-            text = md_path.read_text(encoding="utf-8")
-        except OSError:
-            text = ""
-    if not text:
-        text = t("apps.fallback", url="https://www.plex.tv/media-server-downloads/")
-    return text, _apps_keyboard()
+    return (load_apps(settings.bot_lang), _apps_keyboard())
 
 
 async def handle_apps_message(
@@ -45,7 +40,7 @@ async def handle_apps_message(
         await message.answer(t("request.access_required"))
         return
     text, kb = _build_apps_payload(settings)
-    await message.answer(text, reply_markup=kb, parse_mode="Markdown")
+    await message.answer(text, reply_markup=kb, parse_mode="HTML")
 
 
 async def handle_apps_callback(
@@ -55,12 +50,13 @@ async def handle_apps_callback(
         await cq.answer()
         return
     if not await repo.has_active_access(cq.from_user.id):
+        assert isinstance(cq.message, types.Message)
         await cq.message.answer(t("request.access_required"))
         await cq.answer()
         return
     text, kb = _build_apps_payload(settings)
     assert isinstance(cq.message, types.Message)
-    await cq.message.answer(text, reply_markup=kb, parse_mode="Markdown")
+    await cq.message.answer(text, reply_markup=kb, parse_mode="HTML")
     await cq.answer()
 
 

@@ -55,7 +55,6 @@ class Settings(BaseSettings):
 
     # UX
     watch_url: str = "https://app.plex.tv/desktop/"
-    apps_markdown_path: str = "/data/apps.md"
 
     # Storage
     db_path: str = "/data/db.sqlite"
